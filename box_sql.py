@@ -131,11 +131,11 @@ def get_measurements():
     instrument.write(":PAGE:SCON:SING")  # starts the single measurement operation
     instrument.query("*OPC?")  # starts to monitor pending operations, and sets/clears the Operation complete
     instrument.write('FORM:DATA ASC')  # specifies the data format as ASCII
-    v_4 = instrument.query_ascii_values(":DATA? 'V4'")  # gets the data of V3 measurements
-    i_1 = instrument.query_ascii_values(":DATA? 'I1'")  # gets the data of I1 measurements
-    i_2 = instrument.query_ascii_values(":DATA? 'I2'")  # gets the data of I1 measurements
-    i_3 = instrument.query_ascii_values(":DATA? 'I3'")  # gets the data of I1 measurements
-    i_4 = instrument.query_ascii_values(":DATA? 'I4'")  # gets the data of I3 measurements
+    v_4 = instrument.query_ascii_values(":DATA? 'V4'")
+    i_1 = instrument.query_ascii_values(":DATA? 'I1'")
+    i_2 = instrument.query_ascii_values(":DATA? 'I2'")
+    i_3 = instrument.query_ascii_values(":DATA? 'I3'")
+    i_4 = instrument.query_ascii_values(":DATA? 'I4'")
     return v_4, i_1, i_2, i_3, i_4
 
 
@@ -179,7 +179,7 @@ def fill_data_list(sheet: Worksheet, data: dict):
         for i in range(len(values)):
             sheet["{}{}".format(letter_index, i + 2)] = values[i]
 
-def save_data_to_bd(configs: dict, V3: list, I1: list, I3: list, chip_name: str):
+def save_data_to_bd(configs: dict, voltage_inputs: list, anode_currents: list, cathode_currents: list, chip_name: str):
     db_configs = {
     'user': 'prober',
     'password': 'eU1vf0k7L916#',
@@ -194,17 +194,10 @@ def save_data_to_bd(configs: dict, V3: list, I1: list, I3: list, chip_name: str)
         INSERT INTO iv_data (wafer, chip, int_time, temperature, voltage_input, anode_current, cathode_current, anode_current_corrected, stage)
         VALUES (%(wafer)s, %(chip)s, %(int_time)s, %(temperature)s, %(voltage_input)s,  %(anode_current)s, %(cathode_current)s, %(anode_current_corrected)s, %(stage)s)
         """
-        for voltage_input, anode_current, cathode_current in zip(V3, I1, I3):
-            anode_current_corrected = compute_corrected_current(
-                configs['TEMPERATURE'], anode_current)
+        for voltage_input, anode_current, cathode_current in zip(voltage_inputs, anode_currents, cathode_currents):
+            anode_current_corrected = compute_corrected_current(configs['TEMPERATURE'], anode_current)
             cursor.execute(
-                query, {'wafer': WAFER, 'chip': chip_1, 'int_time': configs['INT_TIME'], 'temperature': configs['TEMPERATURE'], 'voltage_input': voltage_input, 'anode_current': anode_current, 'cathode_current': cathode_current, 'anode_current_corrected': anode_current_corrected, 'stage': stage})
-            cnx.commit()
-            cursor.execute(
-                query, {'wafer': WAFER, 'chip': chip_2, 'int_time': configs['INT_TIME'], 'temperature': configs['TEMPERATURE'], 'voltage_input': voltage_input, 'anode_current': anode_current, 'cathode_current': cathode_current, 'anode_current_corrected': anode_current_corrected, 'stage': stage})
-            cnx.commit()
-            cursor.execute(
-                query, {'wafer': WAFER, 'chip': chip_3, 'int_time': configs['INT_TIME'], 'temperature': configs['TEMPERATURE'], 'voltage_input': voltage_input, 'anode_current': anode_current, 'cathode_current': cathode_current, 'anode_current_corrected': anode_current_corrected, 'stage': stage})
+                query, {'wafer': WAFER, 'chip': chip_name, 'int_time': configs['INT_TIME'], 'temperature': configs['TEMPERATURE'], 'voltage_input': voltage_input, 'anode_current': anode_current, 'cathode_current': cathode_current, 'anode_current_corrected': anode_current_corrected, 'stage': stage})
             cnx.commit()
     except mysql.connector.Error as err:
         if err.errno == errorcode.ER_ACCESS_DENIED_ERROR:
@@ -227,9 +220,9 @@ def compute_corrected_current(temp: float, current: float):
 set_configs(configs)
 data_v4, data_i1, data_i2, data_i3, data_i4 = get_minimal_measures()
 
-save_data_to_bd(configs, data_v4, data_i1, data_i3, chip_1)
-save_data_to_bd(configs, data_v4, data_i1, data_i3, chip_2)
-save_data_to_bd(configs, data_v4, data_i1, data_i3, chip_3)
+save_data_to_bd(configs, data_v4, data_i1, data_i4, chip_1)
+save_data_to_bd(configs, data_v4, data_i2, data_i4, chip_2)
+save_data_to_bd(configs, data_v4, data_i3, data_i4, chip_3)
 
 
 configs_20v = {
@@ -280,10 +273,10 @@ def sweep():
 
     instrument.query("*OPC?")  # starts to monitor pending operations, and sets/clears the Operation complete
     instrument.write('FORM:DATA ASC')  # specifies the data format as ASCII
-    v_4 = instrument.query_ascii_values(":DATA? 'V4'")  # gets the data of I1 measurements
+    v_4 = instrument.query_ascii_values(":DATA? 'V4'")
     i_1 = instrument.query_ascii_values(":DATA? 'I1'")
-    i_2 = instrument.query_ascii_values(":DATA? 'I2'")  # gets the data of I1 measurements
-    i_3 = instrument.query_ascii_values(":DATA? 'I3'")  # gets the data of I3 measurements
+    i_2 = instrument.query_ascii_values(":DATA? 'I2'")
+    i_3 = instrument.query_ascii_values(":DATA? 'I3'")
     i_4 = instrument.query_ascii_values(":DATA? 'I4'")
     return v_4, i_1, i_2, i_3, i_4
 
@@ -306,9 +299,9 @@ def save_20v_measurements(configs_20v: dict, V3: list, I1: list, I3: list, chip_
 set_configs(configs_20v)
 data_v4, data_i1, data_i2, data_i3, data_i4 = sweep()
 
-save_data_to_bd(configs_20v, data_v4, data_i1, data_i3, chip_1)
-save_data_to_bd(configs_20v, data_v4, data_i1, data_i3, chip_2)
-save_data_to_bd(configs_20v, data_v4, data_i1, data_i3, chip_3)
+save_data_to_bd(configs_20v, data_v4, data_i1, data_i4, chip_1)
+save_data_to_bd(configs_20v, data_v4, data_i2, data_i4, chip_2)
+save_data_to_bd(configs_20v, data_v4, data_i3, data_i4, chip_3)
 
 try:
     rm.close()
