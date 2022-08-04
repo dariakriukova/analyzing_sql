@@ -22,7 +22,10 @@ from orm import IVMeasurement, Wafer, Chip
 def summary(ctx: click.Context, chips_type: Union[str, None], wafer_name: str, file_name: str):
     check_file_exists(file_name)
     session: Session = ctx.obj['session']
-    wafer = session.query(Wafer).filter(Wafer.name == wafer_name).first()
+    if ctx.obj['default_wafer'].name != wafer_name:
+        wafer = session.query(Wafer).filter(Wafer.name == wafer_name).first()
+    else:
+        wafer = ctx.obj['default_wafer']
     query = session.query(IVMeasurement) \
         .filter(IVMeasurement.chip.has(Chip.wafer.__eq__(wafer)))
     if chips_type is not None:
@@ -45,7 +48,6 @@ def get_frames(measurements: list[IVMeasurement, ...], voltages: list[Decimal, .
         -> dict[str, pd.DataFrame]:
     all_df = pd.DataFrame(dtype='float64')
     summary_df = pd.DataFrame(columns=voltages, dtype='float64')
-    # click.echo(f'Got {len(measurements)} measurements.')
     with click.progressbar(measurements, label='Processing measurements...') as progress:
         for measurement in progress:
             all_df.loc[measurement.chip.name,

@@ -2,7 +2,7 @@ import click
 import keyring
 from sqlalchemy import create_engine, desc
 from sqlalchemy.exc import OperationalError
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session
 
 from orm import Wafer
 from .set_db import set_db
@@ -21,12 +21,13 @@ def main(ctx: click.Context):
                     "server": "95.217.222.91",
                     "db": "elfys"
                 }))
-            with sessionmaker(bind=engine).begin() as session:
-                last_wafer = session.query(Wafer).order_by(desc(Wafer.created_at)).first()
-                default_wafer_name = last_wafer.name
-                wafer_option = next((o for o in summary.params if o.name == 'wafer_name'))
-                wafer_option.default = default_wafer_name
-                ctx.obj = {'session': session}
+            session = Session(bind=engine)
+            ctx.with_resource(session)
+            last_wafer = session.query(Wafer).order_by(desc(Wafer.created_at)).first()
+            default_wafer_name = last_wafer.name
+            wafer_option = next((o for o in summary.params if o.name == 'wafer_name'))
+            wafer_option.default = default_wafer_name
+            ctx.obj = {'session': session, 'default_wafer': last_wafer}
         except OperationalError:
             click.echo(f"Database credentials are not set. Try running {set_db.name}.")
             exit()
