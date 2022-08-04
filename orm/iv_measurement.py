@@ -1,15 +1,15 @@
-from sqlalchemy import Column, Integer, Float, VARCHAR, DECIMAL
+from sqlalchemy import Column, Integer, Float, VARCHAR, DECIMAL, ForeignKey
+from sqlalchemy.orm import relationship
 
-from sqlalchemy.orm import declarative_base
-
-Base = declarative_base()
+from .base import Base
 
 
 class IVMeasurement(Base):
     __tablename__ = 'iv_data'
+
     id = Column(Integer, primary_key=True, nullable=False)
-    wafer = Column(VARCHAR(length=20))
-    chip = Column(VARCHAR(length=20))
+    chip_id = Column(Integer, ForeignKey('chip.id'))
+    chip = relationship("Chip", back_populates='iv_measurements')
     int_time = Column(VARCHAR(length=20))
     temperature = Column(Float)
     voltage_input = Column(DECIMAL(precision=10, scale=5))
