@@ -31,7 +31,3 @@ def main(ctx: click.Context):
         except OperationalError:
             click.echo(f"Database credentials are not set. Try running {set_db.name}.")
             exit()
-        except Exception as e:
-            click.echo(e)
-            click.echo('Something went wrong. Try again.')
-            exit()

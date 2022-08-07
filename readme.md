@@ -49,6 +49,5 @@ Commands:
 - [ ] Measurement stage (after dicing etc.) filtering and info
 - [ ] Tail option to show N last measurements
 - [ ] Add database migrations
-- [ ] Sentry integration
 - [ ] Implement chip measurement command
 - [ ] Conditional formatting in excel file
