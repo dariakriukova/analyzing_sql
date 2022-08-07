@@ -17,6 +17,7 @@ class Chip(Base):
     @property
     def x_coordinate(self):
         return int(self.name[1:3])
+
     @property
     def y_coordinate(self):
         return int(self.name[3:5])

@@ -10,7 +10,7 @@ keyring = "==23.7.0"
 pandas = "==1.4.3"
 click = "==8.1.3"
 openpyxl = "*"
-pywin32 = { version = "*", sys_platform = "== 'win32'"}
+pywin32 = { version = "*", sys_platform = "== 'win32'" }
 matplotlib = "*"
 numpy = "*"
 sentry-sdk = "*"
