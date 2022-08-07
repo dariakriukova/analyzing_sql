@@ -14,6 +14,7 @@ from matplotlib.ticker import MaxNLocator
 from sqlalchemy.orm import Session, joinedload
 
 from orm import IVMeasurement, Wafer, Chip
+from utils import logger
 
 
 @click.command(name='summary', help='Summarize data in excel file.')
@@ -22,9 +23,13 @@ from orm import IVMeasurement, Wafer, Chip
 @click.option("-w", "--wafer", "wafer_name", prompt=f"Wafer name", help="Wafer name.")
 @click.option("-o", "--output", "file_name", default="summary",
               help="Output file names without extension. Default: summary")
+@click.option("--outliers-quotient", default=2.0,
+              help="Standard deviation multiplier to detect outlier measurements. Default is 2.0",
+              type=float)
 # TODO: add option to select last N measurements to analyze
 # TODO: add option to filter measurement stage
-def summary(ctx: click.Context, chips_type: Union[str, None], wafer_name: str, file_name: str):
+def summary(ctx: click.Context, chips_type: Union[str, None], wafer_name: str, file_name: str,
+            outliers_quotient: float):
     session: Session = ctx.obj['session']
     if ctx.obj['default_wafer'].name != wafer_name:
         wafer = session.query(Wafer).filter(Wafer.name == wafer_name).first()
@@ -36,18 +41,18 @@ def summary(ctx: click.Context, chips_type: Union[str, None], wafer_name: str, f
     if chips_type is not None:
         query = query.filter(IVMeasurement.chip.has(Chip.type.__eq__(chips_type)))
     else:
-        click.echo('No chips type specified. Analyzing all chips.')
+        logger.info('No chips type specified. Analyzing all chips.')
 
     measurements = query.all()
     data = get_data(measurements)
 
     plot_summary_voltages = list(map(Decimal, ["0.01", "5"]))
-    fig = plot_data(measurements, plot_summary_voltages)
+    fig = plot_data(measurements, plot_summary_voltages, outliers_quotient=outliers_quotient)
 
     png_file_name = file_name + '.png'
     check_file_exists(png_file_name)
     fig.savefig(png_file_name, dpi=300)
-    click.echo(f'Summary data is plotted to {png_file_name}')
+    logger.info(f'Summary data is plotted to {png_file_name}')
 
     exel_file_name = file_name + '.xlsx'
     check_file_exists(exel_file_name)
@@ -57,7 +62,7 @@ def summary(ctx: click.Context, chips_type: Union[str, None], wafer_name: str, f
         data[excel_summary_voltages].to_excel(writer, sheet_name='Summary')
         data.to_excel(writer, sheet_name='All')
         info.to_excel(writer, sheet_name='Info')
-    click.echo(f'Summary data is saved to {exel_file_name}')
+    logger.info(f'Summary data is saved to {exel_file_name}')
 
 
 def get_data(measurements: list[IVMeasurement, ...]) -> pd.DataFrame:
@@ -151,7 +156,7 @@ def plot_heat_map(ax: Axes, measurements: list[IVMeasurement, ...], low, high):
 
 
 def plot_data(measurements: list[IVMeasurement, ...],
-              summary_voltages: list[Decimal, ...]) -> Figure:
+              summary_voltages: list[Decimal, ...], outliers_quotient: float) -> Figure:
     fig, axes = plt.subplots(nrows=len(summary_voltages), ncols=2,
                              figsize=(10, 5 * len(summary_voltages)),
                              gridspec_kw=dict(left=0.08, right=0.95, bottom=0.05, top=0.95,
@@ -162,13 +167,11 @@ def plot_data(measurements: list[IVMeasurement, ...],
         data = np.array(
             [measurement.anode_current_corrected for measurement in target_measurements])
 
-        outliers_idx = get_outliers_idx(data, 2)
+        outliers_idx = get_outliers_idx(data, outliers_quotient)
         if outliers_idx.any():
-            # TODO: add including/excluding outliers option
-            # TODO: use warning output instead of click.echo
             outlier_chip_names = (outlier.chip.name for outlier in
                                   np.array(target_measurements)[outliers_idx])
-            click.echo(
+            logger.warn(
                 f'Outliers detected! {", ".join(outlier_chip_names)} are ignored on {voltage}V histogram and heat map color scale')
             data = data[~outliers_idx]
 
