@@ -13,3 +13,10 @@ class Chip(Base):
     name = Column(VARCHAR(length=20))
     type = Column(CHAR(length=1))
     iv_measurements = relationship("IVMeasurement", back_populates='chip')
+
+    @property
+    def x_coordinate(self):
+        return int(self.name[1:3])
+    @property
+    def y_coordinate(self):
+        return int(self.name[3:5])

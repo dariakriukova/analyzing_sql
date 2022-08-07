@@ -10,4 +10,5 @@ class Wafer(Base):
     id = Column(INTEGER, primary_key=True, nullable=False)
     name = Column(VARCHAR(length=20))
     chips = relationship("Chip", back_populates='wafer')
+    # TODO: rename to record_created_at
     created_at = Column(DATETIME)

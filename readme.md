@@ -46,8 +46,9 @@ Commands:
 
 ### TODO
 
+- [ ] Measurement stage (after dicing etc.) filtering and info
+- [ ] Tail option to show N last measurements
 - [ ] Add database migrations
-- [ ] Implement histogram summary generation
-- [ ] Implement heatmap summary generation
-- [ ] Implement chip measurement script
+- [ ] Sentry integration
+- [ ] Implement chip measurement command
 - [ ] Conditional formatting in excel file
