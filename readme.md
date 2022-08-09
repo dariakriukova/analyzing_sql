@@ -45,7 +45,6 @@ Commands:
 
 ### TODO
 
-- [ ] Measurement stage (after dicing etc.) filtering and info
 - [ ] Tail option to show N last measurements
 - [ ] Add database migrations
 - [ ] Implement chip measurement command
