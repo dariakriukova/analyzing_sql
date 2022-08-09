@@ -17,18 +17,21 @@ from orm import IVMeasurement, Wafer, Chip
 from utils import logger
 
 
-@click.command(name='summary', help='Summarize data in excel file.')
+@click.command(name='summary', help='Make summary files (png and xlsx) for IV measurements data.')
 @click.pass_context
 @click.option("-t", "--chips-type", help="Type of the chips to analyze.")
 @click.option("-w", "--wafer", "wafer_name", prompt=f"Wafer name", help="Wafer name.")
-@click.option("-o", "--output", "file_name", default="summary",
-              help="Output file names without extension. Default: summary")
-@click.option("--outliers-quotient", default=2.0,
-              help="Standard deviation multiplier to detect outlier measurements. Default is 2.0",
+@click.option("-o", "--output", "file_name", default=lambda: f"summary-{strftime('%y%m%d-%H%M%S')}",
+              help="Output file names without extension.", show_default="summary-{datetime}")
+@click.option("-s", "--chip-state", "chip_states", help="State of the chips to analyze.",
+              default=['all'],
+              show_default=True, multiple=True)
+@click.option("--outliers-quotient", default=2.0, show_default=True,
+              help="Standard deviation multiplier to detect outlier measurements.",
               type=float)
 # TODO: add option to select last N measurements to analyze
-# TODO: add option to filter measurement stage
 def summary(ctx: click.Context, chips_type: Union[str, None], wafer_name: str, file_name: str,
+            chip_states: list[str],
             outliers_quotient: float):
     session: Session = ctx.obj['session']
     if ctx.obj['default_wafer'].name != wafer_name:
@@ -38,13 +41,22 @@ def summary(ctx: click.Context, chips_type: Union[str, None], wafer_name: str, f
     query = session.query(IVMeasurement) \
         .filter(IVMeasurement.chip.has(Chip.wafer.__eq__(wafer))) \
         .options(joinedload(IVMeasurement.chip))
+
     if chips_type is not None:
         query = query.filter(IVMeasurement.chip.has(Chip.type.__eq__(chips_type)))
     else:
         logger.info('No chips type specified. Analyzing all chips.')
 
+    if 'all' not in chip_states:
+        query = query.filter(IVMeasurement.chip_state_id.in_(chip_states))
+
     measurements = query.all()
-    data = get_data(measurements)
+
+    if not measurements:
+        logger.error('No measurements found.')
+        return
+
+    data = get_summary_data(measurements)
 
     plot_summary_voltages = list(map(Decimal, ["0.01", "5"]))
     fig = plot_data(measurements, plot_summary_voltages, outliers_quotient=outliers_quotient)
@@ -57,7 +69,7 @@ def summary(ctx: click.Context, chips_type: Union[str, None], wafer_name: str, f
     exel_file_name = file_name + '.xlsx'
     check_file_exists(exel_file_name)
     with pd.ExcelWriter(exel_file_name) as writer:
-        info = get_info(wafer)
+        info = get_info(ctx, wafer=wafer, chip_states=chip_states)
         excel_summary_voltages = list(map(Decimal, ["0.01", "5", "10", "20", "-1"]))
         data[excel_summary_voltages].to_excel(writer, sheet_name='Summary')
         data.to_excel(writer, sheet_name='All')
@@ -65,7 +77,7 @@ def summary(ctx: click.Context, chips_type: Union[str, None], wafer_name: str, f
     logger.info(f'Summary data is saved to {exel_file_name}')
 
 
-def get_data(measurements: list[IVMeasurement, ...]) -> pd.DataFrame:
+def get_summary_data(measurements: list[IVMeasurement, ...]) -> pd.DataFrame:
     chip_names = {measurement.chip.name for measurement in measurements}
     df = pd.DataFrame(dtype='float64', index=chip_names)
     with click.progressbar(measurements, label='Processing measurements...') as progress:
@@ -76,7 +88,7 @@ def get_data(measurements: list[IVMeasurement, ...]) -> pd.DataFrame:
     return df
 
 
-def get_info(wafer: Wafer) -> pd.Series:
+def get_info(ctx: click.Context, wafer: Wafer, chip_states: list[str]) -> pd.Series:
     try:
         process = subprocess.Popen(['git', 'rev-parse', 'HEAD'], shell=False,
                                    stdout=subprocess.PIPE)
@@ -84,12 +96,17 @@ def get_info(wafer: Wafer) -> pd.Series:
     except FileNotFoundError:
         git_hash = 'unknown'
     format_date = strftime("%A, %d %b %Y", localtime())
+    if 'all' in chip_states:
+        chip_states_str = 'all'
+    else:
+        chip_states_str = "; ".join(
+            [state.name for state in ctx.obj['chip_states'] if str(state.id) in chip_states])
 
     return pd.Series({
         'Wafer': wafer.name,
         'Summary generation date': format_date,
-        'Analyzer git hash': git_hash
-        # TODO: add measurement stage
+        'Analyzer git hash': git_hash,
+        'Chip state': chip_states_str,
     })
 
 
