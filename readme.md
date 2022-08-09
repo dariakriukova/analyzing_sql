@@ -1,5 +1,14 @@
 ## Installation
 
+1. Run the following command in PowerShell to install analyzer.exe
+   ```powershell
+   Invoke-WebRequest -UseBasicParsing -Uri "https://raw.githubusercontent.com/dariakriukova/analyzing_sql/main/install.ps1" -OutFile "./install-analyzing.ps1"; &"./install-analyzing.ps1"; & rm "install-analyzing.ps1"
+   ```
+2. Restart PowerShell and run `analyzer.exe`
+
+
+## Development
+
 1. Install pyenv:
     - [Instructions](https://pyenv-win.github.io/pyenv-win/#installation) for windows
     - [Instructions](https://github.com/pyenv/pyenv#installation) for Linux and MacOS
