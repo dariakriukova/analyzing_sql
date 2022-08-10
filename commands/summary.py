@@ -17,22 +17,19 @@ from orm import IVMeasurement, Wafer, Chip
 from utils import logger
 
 
-@click.command(name='summary', help='Make summary files (png and xlsx) for IV measurements data.')
+@click.command(name='summary', help="Make summary files (png and xlsx) for IV measurements' data.")
 @click.pass_context
 @click.option("-t", "--chips-type", help="Type of the chips to analyze.")
 @click.option("-w", "--wafer", "wafer_name", prompt=f"Wafer name", help="Wafer name.")
 @click.option("-o", "--output", "file_name", default=lambda: f"summary-{strftime('%y%m%d-%H%M%S')}",
               help="Output file names without extension.", show_default="summary-{datetime}")
 @click.option("-s", "--chip-state", "chip_states", help="State of the chips to analyze.",
-              default=['all'],
-              show_default=True, multiple=True)
-@click.option("--outliers-quotient", default=2.0, show_default=True,
-              help="Standard deviation multiplier to detect outlier measurements.",
-              type=float)
-# TODO: add option to select last N measurements to analyze
+              default=['all'], show_default=True, multiple=True)
+@click.option("--outliers-coefficient", default=2.0, show_default=True,
+              help="Standard deviation multiplier to detect outlier measurements.", type=float)
 def summary(ctx: click.Context, chips_type: Union[str, None], wafer_name: str, file_name: str,
             chip_states: list[str],
-            outliers_quotient: float):
+            outliers_coefficient: float):
     session: Session = ctx.obj['session']
     if ctx.obj['default_wafer'].name != wafer_name:
         wafer = session.query(Wafer).filter(Wafer.name == wafer_name).first()
@@ -59,7 +56,7 @@ def summary(ctx: click.Context, chips_type: Union[str, None], wafer_name: str, f
     data = get_summary_data(measurements)
 
     plot_summary_voltages = list(map(Decimal, ["0.01", "5"]))
-    fig = plot_data(measurements, plot_summary_voltages, outliers_quotient=outliers_quotient)
+    fig = plot_data(measurements, plot_summary_voltages, outliers_coefficient=outliers_coefficient)
 
     png_file_name = file_name + '.png'
     check_file_exists(png_file_name)
@@ -70,7 +67,7 @@ def summary(ctx: click.Context, chips_type: Union[str, None], wafer_name: str, f
     check_file_exists(exel_file_name)
     with pd.ExcelWriter(exel_file_name) as writer:
         info = get_info(ctx, wafer=wafer, chip_states=chip_states)
-        excel_summary_voltages = list(map(Decimal, ["0.01", "5", "10", "20", "-1"]))
+        excel_summary_voltages = list(map(Decimal, ["-1", "0.01", "5", "10", "20"]))
         data[excel_summary_voltages].to_excel(writer, sheet_name='Summary')
         data.to_excel(writer, sheet_name='All')
         info.to_excel(writer, sheet_name='Info')
@@ -79,12 +76,12 @@ def summary(ctx: click.Context, chips_type: Union[str, None], wafer_name: str, f
 
 def get_summary_data(measurements: list[IVMeasurement, ...]) -> pd.DataFrame:
     chip_names = {measurement.chip.name for measurement in measurements}
-    df = pd.DataFrame(dtype='float64', index=chip_names)
+    voltages = {measurement.voltage_input for measurement in measurements}
+    df = pd.DataFrame(dtype='float64', index=sorted(chip_names), columns=sorted(voltages))
     with click.progressbar(measurements, label='Processing measurements...') as progress:
         for measurement in progress:
             df.loc[measurement.chip.name,
                    measurement.voltage_input] = measurement.anode_current_corrected
-    df.columns = df.columns.sort_values()
     return df
 
 
@@ -173,7 +170,7 @@ def plot_heat_map(ax: Axes, measurements: list[IVMeasurement, ...], low, high):
 
 
 def plot_data(measurements: list[IVMeasurement, ...],
-              summary_voltages: list[Decimal, ...], outliers_quotient: float) -> Figure:
+              summary_voltages: list[Decimal, ...], outliers_coefficient: float) -> Figure:
     fig, axes = plt.subplots(nrows=len(summary_voltages), ncols=2,
                              figsize=(10, 5 * len(summary_voltages)),
                              gridspec_kw=dict(left=0.08, right=0.95, bottom=0.05, top=0.95,
@@ -184,7 +181,7 @@ def plot_data(measurements: list[IVMeasurement, ...],
         data = np.array(
             [measurement.anode_current_corrected for measurement in target_measurements])
 
-        outliers_idx = get_outliers_idx(data, outliers_quotient)
+        outliers_idx = get_outliers_idx(data, outliers_coefficient)
         if outliers_idx.any():
             outlier_chip_names = (outlier.chip.name for outlier in
                                   np.array(target_measurements)[outliers_idx])
