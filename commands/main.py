@@ -1,4 +1,5 @@
 import logging
+from typing import Union
 
 import click
 import keyring
@@ -7,7 +8,7 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from orm import Wafer, ChipState
-from utils import logger
+from utils import logger, get_db_url
 from .set_db import set_db
 from .summary import summary
 
@@ -17,17 +18,16 @@ from .summary import summary
 @click.option("--log-level", default="INFO", help="Log level.", show_default=True,
               type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
                                 case_sensitive=False))
-def main(ctx: click.Context, log_level: str):
+@click.option("--db-url", help="Database URL.")
+def main(ctx: click.Context, log_level: str, db_url: Union[str, None]):
     logger.setLevel(log_level)
     if ctx.invoked_subcommand == summary.name:
         try:
-            engine = create_engine('mysql://{user}:{pwd}@{server}:3306/{db}'.format(
-                **{
-                    "user": keyring.get_password("ELFYS_DB", "USER"),
-                    "pwd": keyring.get_password("ELFYS_DB", "PASSWORD"),
-                    "server": "95.217.222.91",
-                    "db": "elfys"
-                }), echo="debug" if logger.getEffectiveLevel() == logging.DEBUG else False)
+            if db_url is None:
+                db_url = get_db_url(username=keyring.get_password("ELFYS_DB", "USER"),
+                                    password=keyring.get_password("ELFYS_DB", "PASSWORD"))
+            engine = create_engine(db_url,
+                                   echo="debug" if logger.getEffectiveLevel() == logging.DEBUG else False)
             session = Session(bind=engine)
             ctx.with_resource(session)
             last_wafer = session.query(Wafer).order_by(desc(Wafer.created_at)).first()
