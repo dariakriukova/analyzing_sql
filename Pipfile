@@ -14,6 +14,11 @@ pywin32 = { version = "*", sys_platform = "== 'win32'" }
 matplotlib = "*"
 numpy = "*"
 sentry-sdk = "*"
+pyvisa = "*"
+pyyaml = "*"
+pyvisa-sim = "*"
+yoctopuce = "*"
+scipy = "*"
 
 [dev-packages]
 

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, Float, VARCHAR, DECIMAL, ForeignKey, DATETIME
+from sqlalchemy import Column, Integer, Float, VARCHAR, DECIMAL, ForeignKey, DATETIME, FetchedValue
 from sqlalchemy.orm import relationship
 
 from .base import Base
@@ -18,7 +18,7 @@ class IVMeasurement(Base):
     anode_current = Column(Float)
     cathode_current = Column(Float)
     anode_current_corrected = Column(Float)
-    datetime = Column(DATETIME)
+    datetime = Column(DATETIME, server_default=FetchedValue())
 
     def __repr__(self):
         return "<IVMeasurement(wafer='%s', chip='%s', id='%d')>" % (
