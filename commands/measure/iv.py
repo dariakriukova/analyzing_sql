@@ -160,11 +160,9 @@ def get_minimal_measurements(instrument: GPIBInstrument, configs: list[dict]):
         # print('zero::', i_3[10])
         # Voffset = -popt[0] / popt[1]
         # print('Voffset:', Voffset)
-        # sets_of_measurements.append(
-        #     {'i_1': i_1, 'v_3': v_3, 'i_3': i_3, 'offset': abs(popt[0])})
         offset = abs(popt[0])
-        if prev_measurements and offset <= prev_measurements['offset']:
-            return raw_measurements
+        if prev_measurements and offset >= prev_measurements['offset']:
+            return prev_measurements
         prev_measurements = dict(offset=offset, **raw_measurements)
         sleep(1)
 
