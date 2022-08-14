@@ -23,11 +23,6 @@ def validate_chip_name(ctx, param, value):
     return value
 
 
-# 2 mods of measurements
-#   1. with get_minimal_measurements() to wait stable values, if chip has some capasitance etc
-#   2. simple get_measures() to get the values immediately
-
-
 @click.command(name='iv', help='Measure IV data of the current chip.')
 @click.pass_context
 @click.option("-c", "--config", "config_path", prompt="Config file path",
@@ -40,7 +35,7 @@ def validate_chip_name(ctx, param, value):
 def iv(ctx: click.Context, config_path: str, chip_names: tuple[str], wafer_name: str,
        chip_state: str):
     with click.open_file(config_path) as config_file:
-        configs = yaml.safe_load(config_file)['configs']
+        configs = yaml.safe_load(config_file)
 
     instrument: GPIBInstrument = ctx.obj['instrument']
     session: Session = ctx.obj['session']
@@ -52,6 +47,16 @@ def iv(ctx: click.Context, config_path: str, chip_names: tuple[str], wafer_name:
 
     wafer = session.query(Wafer).filter(Wafer.name == wafer_name) \
         .options(joinedload(Wafer.chips)).one_or_none()
+
+    if len(configs['chips']) != len(chip_names):
+        chip_names = list(chip_names)
+        if len(chip_names) > 0:
+            logger.warning(
+                f"Number of chip names does not match number of chips in config file. {len(configs['chips'])} chip names expected")
+        for i in range(len(configs['chips']) - len(chip_names)):
+            chip_name = click.prompt(f"Input chip name {i + 1}", type=str)
+            chip_names.append(chip_name)
+
     if wafer is None:
         chips = [Chip(name=chip_name) for chip_name in chip_names]
         wafer = Wafer(name=wafer_name, chips=chips)
@@ -64,29 +69,21 @@ def iv(ctx: click.Context, config_path: str, chip_names: tuple[str], wafer_name:
     session.add(wafer)
     session.commit()
 
-    for config in configs:
-        logger.info(f'Executing config {config["name"]}')
-        set_configs(instrument, config['instrument'])
+    for measurement_config in configs['measurements']:
+        logger.info(f'Executing config {measurement_config["name"]}')
+        set_configs(instrument, measurement_config['instrument'])
 
-        if config['program']['mode'] == 'minimum':
-            raw_measurements = get_minimal_measurements(instrument, config['measurements'])
-        elif config['program']['mode'] == 'normal':
-            raw_measurements = get_measurements(instrument, config['measurements'])
+        if measurement_config['program'].get('minimum'):
+            raw_measurements = get_minimal_measurements(instrument, configs['queries'])
+        else:
+            raw_measurements = get_measurements(instrument, configs['queries'])
 
-        if len(config['chips']) != len(chip_names):
-            chip_names = list(chip_names)
-            if len(chip_names) > 0:
-                logger.warning(
-                    f"Number of chip names does not match number of chips in config file. {len(config['chips'])} chip names expected")
-            for i in range(len(config['chips']) - len(chip_names)):
-                chip_name = click.prompt(f"Input chip name {i + 1}", type=str)
-                chip_names.append(chip_name)
-        for chip_name, chip_config in zip(chip_names, config['chips'], strict=True):
+        for chip_name, chip_config in zip(chip_names, configs['chips'], strict=True):
             chip_id = next(chip.id for chip in wafer.chips if chip.name == chip_name)
             measurements_kwargs = dict(
                 chip_state_id=int(chip_state),
                 chip_id=chip_id,
-                **config['program']['chip_kwargs'],
+                **measurement_config['program']['chip_kwargs'],
             )
             measurements = create_measurements(raw_measurements, temperature, chip_config,
                                                **measurements_kwargs)
@@ -103,7 +100,7 @@ def set_configs(instrument: GPIBInstrument, configs: list[dict]):
 
     for config in configs:
         config_name, config_value = next(iter(config.items()))
-        instrument.write(f":{config_name} {config_value}")
+        instrument.write(f"{config_name} {config_value}")
 
 
 def get_measurements(instrument: GPIBInstrument, configs: list[dict]) -> dict[str, list]:
@@ -142,7 +139,8 @@ def create_measurements(measurements: dict[str, list], temperature: float, chip_
 
 
 def get_minimal_measurements(instrument: GPIBInstrument, configs: list[dict]):
-    linear_fun = lambda x, a, b: a + b * x
+    def linear(x, a, b):
+        return a + b * x
 
     prev_measurements: dict[str, list] = dict()
     while True:
@@ -154,17 +152,13 @@ def get_minimal_measurements(instrument: GPIBInstrument, configs: list[dict]):
             ydata = raw_measurements['cathode_current']
         else:
             raise ValueError('No current measurement found')
-        popt, pcov = curve_fit(f=linear_fun, xdata=xdata, ydata=ydata, p0=[0, 0],
+        popt, pcov = curve_fit(f=linear, xdata=xdata, ydata=ydata, p0=[0, 0],
                                bounds=(-np.inf, np.inf))
-        # print('popt::', popt, '; pcov::', pcov)
-        # print('zero::', i_3[10])
-        # Voffset = -popt[0] / popt[1]
-        # print('Voffset:', Voffset)
         offset = abs(popt[0])
         if prev_measurements and offset >= prev_measurements['offset']:
             return prev_measurements
         prev_measurements = dict(offset=offset, **raw_measurements)
-        sleep(1)
+        sleep(0.5)
 
 
 def compute_corrected_current(temp: float, current: float):

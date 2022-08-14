@@ -1,20 +1,65 @@
-common: &common
-  measurements:
-    - name: voltage
-      query: ":DATA? 'V3'"
-    - name: anode_current
-      query: ":DATA? 'I1'"
-    - name: cathode_current
-      query: ":DATA? 'I3'"
-  chips:
-    - voltage: voltage
-      anode_current: anode_current
-      cathode_current: cathode_current
+queries:
+  - name: voltage
+    query: ":DATA? 'V3'"
+  - name: anode_current
+    query: ":DATA? 'I1'"
+  - name: cathode_current
+    query: ":DATA? 'I3'"
+chips:
+  - voltage: voltage
+    anode_current: anode_current
+    cathode_current: cathode_current
 
-configs:
-  - name: 20v
-    <<: *common
+measurements:
+  - name: 0.01v
     instrument:
+      # sets the voltage output MODE
+      - :PAGE:CHAN:SMU1:MODE: V
+      - :PAGE:CHAN:SMU2:MODE: V
+      - :PAGE:CHAN:SMU3:MODE: V
+      - :PAGE:CHAN:SMU4:MODE: V
+
+      - :PAGE:CHAN:SMU1:FUNC: CONS  # sets the function (FCTN) of SMU1. SMU1 - Emitter
+      - :PAGE:CHAN:SMU2:FUNC: CONS  # sets the function (FCTN) of SMU1. SMU1 - Emitter
+      - :PAGE:CHAN:SMU3:FUNC: VAR1  # sets the function (FCTN) of SMU3. SMU3 - Base
+
+      - :PAGE:CHAN:MODE: SWEEP  # sets the sweep measurement mode
+
+
+      - :PAGE:MEAS:VAR1:MODE: SINGLE  # sets the SWEEP MODE of VAR1 for sweep measurement.(Single)
+      - :PAGE:MEAS:VAR1:SPAC: LIN  # selects the sweep type of VAR1 as linear staircase
+      - :PAGE:MEAS:VAR1:START: 0.01  # sets the sweep START value of VAR1.
+      - :PAGE:MEAS:VAR1:STEP: 0.001  # sets the sweep STEP value of VAR1 for the linear sweep.
+      - :PAGE:MEAS:VAR1:STOP: -0.01  # sets the sweep STOP value of VAR1.
+      - :PAGE:MEAS:VAR1:COMP: 0.1  # sets the COMPLIANCE value of VAR1.
+      #      - :PAGE:MEAS:HTIM: 0  # sets the HOLD TIME of sweep measurement
+      #      - :PAGE:MEAS:DEL: 0  # sets the DELAY TIME of SMU.
+
+      - :PAGE:MEAS:CONS:SMU1: 0  # sets the constant SOURCE value of SMU1 for sweep measurements
+      - :PAGE:MEAS:CONS:SMU3: 0  # sets the constant SOURCE value of SMU3 for sweep measurements
+
+      # Integration time
+      - :PAGE:MEAS:MSET:ITIM: &int_time_v001 SHORT
+
+
+      - :PAGE:DISP:LIST: "'V3','I1','I3'"  # selects the variable names for LIST display
+      - :PAGE:GLIS:SCAL:AUTO: ONCE
+    program:
+      minimum: true
+      chip_kwargs:
+        int_time: *int_time_v001
+
+  - name: 20v
+    instrument:
+      - :PAGE:CHAN:SMU1:MODE: V
+      - :PAGE:CHAN:SMU2:MODE: V
+      - :PAGE:CHAN:SMU3:MODE: V
+      - :PAGE:CHAN:SMU4:MODE: V
+      - :PAGE:CHAN:SMU1:FUNC: CONS  # sets the function (FCTN) of SMU1. SMU1 - Emitter
+      - :PAGE:CHAN:SMU2:FUNC: CONS  # sets the function (FCTN) of SMU2
+      - :PAGE:CHAN:SMU3:FUNC: VAR1  # sets the function (FCTN) of SMU3. SMU3 - Base
+      - :PAGE:CHAN:MODE: SWEEP  # sets the sweep measurement mode
+
       - :PAGE:MEAS:VAR1:MODE: SINGLE  # sets the SWEEP MODE of VAR1 for sweep measurement.(Single)
       - :PAGE:MEAS:VAR1:SPAC: LIN  # selects the sweep type of VAR1 as linear staircase
       - :PAGE:MEAS:VAR1:START: 20  # sets the sweep START value of VAR1.
@@ -27,63 +72,10 @@ configs:
       # Integration time
       - :PAGE:MEAS:MSET:ITIM: &int_time_v20 SHORT
 
-      # sets the voltage output MODE
-      - :PAGE:CHAN:SMU1:MODE: V
-      - :PAGE:CHAN:SMU3:MODE: V
-
-      - :PAGE:CHAN:SMU1:FUNC: CONS  # sets the function (FCTN) of SMU1. SMU1 - Emitter
-      - :PAGE:CHAN:SMU3:FUNC: VAR1  # sets the function (FCTN) of SMU3. SMU3 - Base
-
-      # Ranging mode
-      #      - :PAGE:MEAS:MSET:SMU1:RANG:MODE: LIM # TODO: verify if those are default values
-      #      - :PAGE:MEAS:MSET:SMU3:RANG:MODE: LIM
-      #      - :PAGE:MEAS:MSET:SMU1:RANG: 1e-9
-      #      - :PAGE:MEAS:MSET:SMU3:RANG: 1e-9
-
-
-      - :PAGE:CHAN:MODE: SWEEP  # sets the sweep measurement mode
-      - :PAGE:DISP:LIST: "'V3','I1','I3'"  # selects the variable names for LIST display
       - :PAGE:MEAS:CONS:SMU1: 0  # sets the constant SOURCE value of SMU1 for sweep measurements
       - :PAGE:MEAS:CONS:SMU3: 0  # sets the constant SOURCE value of SMU3 for sweep measurements
+
+      - :PAGE:DISP:LIST: "'V3','I1','I3'"  # selects the variable names for LIST display
     program:
-      mode: 'normal' # 'normal' or 'minimum'
       chip_kwargs:
         int_time: *int_time_v20
-
-  - name: 0.01v
-    <<: *common
-    instrument:
-      - :PAGE:MEAS:VAR1:MODE: SINGLE  # sets the SWEEP MODE of VAR1 for sweep measurement.(Single)
-      - :PAGE:MEAS:VAR1:SPAC: LIN  # selects the sweep type of VAR1 as linear staircase
-      - :PAGE:MEAS:VAR1:START: 0.01  # sets the sweep START value of VAR1.
-      - :PAGE:MEAS:VAR1:STEP: 0.001  # sets the sweep STEP value of VAR1 for the linear sweep.
-      - :PAGE:MEAS:VAR1:STOP: -0.01  # sets the sweep STOP value of VAR1.
-      - :PAGE:MEAS:VAR1:COMP: 0.1  # sets the COMPLIANCE value of VAR1.
-      #      - :PAGE:MEAS:HTIM: 0  # sets the HOLD TIME of sweep measurement
-      #      - :PAGE:MEAS:DEL: 0  # sets the DELAY TIME of SMU.
-
-      # Integration time
-      - :PAGE:MEAS:MSET:ITIM: &int_time_v001 SHORT
-
-      # sets the voltage output MODE
-      - :PAGE:CHAN:SMU1:MODE: V
-      - :PAGE:CHAN:SMU3:MODE: V
-
-      - :PAGE:CHAN:SMU1:FUNC: CONS  # sets the function (FCTN) of SMU1. SMU1 - Emitter
-      - :PAGE:CHAN:SMU3:FUNC: VAR1  # sets the function (FCTN) of SMU3. SMU3 - Base
-
-      # Ranging mode
-      #      - :PAGE:MEAS:MSET:SMU1:RANG:MODE: LIM
-      #      - :PAGE:MEAS:MSET:SMU3:RANG:MODE: LIM
-      #      - :PAGE:MEAS:MSET:SMU1:RANG: 1e-9
-      #      - :PAGE:MEAS:MSET:SMU3:RANG: 1e-9
-
-      - :PAGE:DISP:LIST: "'V3','I1','I3'"  # selects the variable names for LIST display
-      - :PAGE:CHAN:MODE: SWEEP  # sets the sweep measurement mode
-      - :PAGE:MEAS:CONS:SMU1: 0  # sets the constant SOURCE value of SMU1 for sweep measurements
-      - :PAGE:MEAS:CONS:SMU3: 0  # sets the constant SOURCE value of SMU3 for sweep measurements
-      - :PAGE:GLIS:SCAL:AUTO: ONCE
-    program:
-      mode: 'minimum' # 'normal' or 'minimum'
-      chip_kwargs:
-        int_time: *int_time_v001
