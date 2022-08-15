@@ -46,6 +46,16 @@ measurements:
       - :PAGE:GLIS:SCAL:AUTO: ONCE
     program:
       minimum: true
+      validation:
+        anode_current:
+          min:
+            value: !!float 1e-13
+            message: Current leakage is too low. Check if there is a good contact.
+            abs: true
+          max:
+            value: !!float 1e-9
+            message: Current leakage is too high. Check if there is a light exposure.
+            abs: true
       chip_kwargs:
         int_time: *int_time_v001
 

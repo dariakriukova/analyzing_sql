@@ -1,3 +1,4 @@
+import pprint
 import re
 from time import sleep
 from typing import Sequence
@@ -81,6 +82,12 @@ def iv(ctx: click.Context, config_path: str, chip_names: list[str], wafer_name: 
         else:
             raw_measurements = get_raw_measurements(instrument, configs['queries'])
 
+        if measurement_config['program'].get('validation'):
+            validation_config = measurement_config['program']['validation']
+            if not validate_raw_measurements(raw_measurements, validation_config):
+                logger.info('\n' + pprint.pformat(raw_measurements))
+                click.confirm("Do you want to save these measurements?", abort=True, default=True)
+
         for chip_name, chip_config in zip(chip_names, configs['chips'], strict=True):
             chip_id = next(chip.id for chip in wafer.chips if chip.name == chip_name)
             measurements_kwargs = dict(
@@ -121,6 +128,35 @@ def get_raw_measurements(instrument: GPIBInstrument, configs: list[dict]) -> dic
     return measurements
 
 
+def validate_raw_measurements(measurements: dict[str, list],
+                              configs: dict[str, dict[dict]]) -> bool:
+    for value_name, config in configs.items():
+        for validator_name, rules in config.items():
+            values = np.array(measurements[value_name])
+            if rules.get('abs'):
+                values = np.abs(values)
+            if validator_name == 'min':
+                if any(values < rules['value']):
+                    logger.warning(rules['message'])
+                    return False
+            elif validator_name == 'max':
+                if any(values > rules['value']):
+                    logger.warning(rules['message'])
+                    return False
+            else:
+                raise ValueError(f'Unknown validator {validator_name}')
+
+    for name, values in measurements.items():
+        if 'current' in name:
+            if any(np.log10(np.abs(values)) < -13):
+                logger.warning(f'Current leakage is too low. Check if there is a good contact')
+                return False
+            if any(np.log10(np.abs(values)) > -9):
+                logger.warning(f'Current leakage is too high. Check if there is a light exposure')
+                return False
+    return True
+
+
 def create_measurements(measurements: dict[str, list], temperature: float, chip_config: dict,
                         **kwargs) -> list[IVMeasurement]:
     chip_measurements = zip(measurements[chip_config['voltage']],
@@ -159,6 +195,7 @@ def get_minimal_measurements(instrument: GPIBInstrument, configs: list[dict]):
                                bounds=(-np.inf, np.inf))
         offset = abs(popt[0])
         if prev_measurements and offset >= prev_measurements['offset']:
+            prev_measurements.pop('offset')
             return prev_measurements
         prev_measurements = dict(offset=offset, **raw_measurements)
         sleep(0.5)
