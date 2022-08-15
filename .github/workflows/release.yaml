@@ -1,0 +1,35 @@
+on:
+  push:
+    tags:
+      - '*'
+
+name: Create Release
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+        with:
+          python-version: '3.10'
+          cache: 'pipenv'
+
+      - run: pip install pipenv
+      - run: pipenv install
+      - run: pipenv run pyinstaller analyzing.py
+        id: pyinstaller
+      # Optionally verify that it works (provided that it does not need user interaction)
+      - run: ./dist/analyzing/analyzing.exe --help
+      - name: Archive Release
+        uses: thedoctor0/zip-release@main
+        with:
+          type: 'zip'
+          path: './dist/analyzing/*'
+          filename: 'analyzing.zip'
+      - name: Upload Release
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: "analyzing.zip"
+          token: ${{ secrets.GITHUB_TOKEN }}
