@@ -99,10 +99,7 @@ def iv(ctx: click.Context, config_path: str, chip_names: list[str], wafer_name: 
             measurements = create_measurements(raw_measurements, temperature, chip_config,
                                                **measurements_kwargs)
             session.add_all(measurements)
-        session.commit()
-
-
-TARGET_TEMPERATURE = 25
+    session.commit()
 
 
 def set_configs(instrument: GPIBInstrument, configs: list[dict]):
@@ -196,7 +193,8 @@ def get_minimal_measurements(instrument: GPIBInstrument, configs: list[dict]):
 
 
 def compute_corrected_current(temp: float, current: float):
-    return 1.15 ** (TARGET_TEMPERATURE - temp) * current
+    target_temperature = 25
+    return 1.15 ** (target_temperature - temp) * current
 
 
 def get_temperature() -> float:
