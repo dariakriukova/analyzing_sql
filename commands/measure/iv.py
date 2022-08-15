@@ -100,6 +100,7 @@ def iv(ctx: click.Context, config_path: str, chip_names: list[str], wafer_name: 
                                                **measurements_kwargs)
             session.add_all(measurements)
     session.commit()
+    logger.info('Measurements saved')
 
 
 def set_configs(instrument: GPIBInstrument, configs: list[dict]):
@@ -121,7 +122,7 @@ def get_raw_measurements(instrument: GPIBInstrument, configs: list[dict]) -> dic
 
     measurements: dict[str, list] = dict()
     for config in configs:
-        value: list = list(instrument.query_ascii_values(config['query']))
+        value = list(instrument.query_ascii_values(config['query']))
         measurements[config['name']] = value
     return measurements
 
