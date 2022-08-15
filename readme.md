@@ -19,7 +19,7 @@
 4. Navigate to the project directory
    `cd analyzing_sql`
 5. Install python dependencies
-   `python -m pipenv install`
+   `python -m pipenv install --dev`
      <details><summary>Expected output (on MacOS)</summary>
      <pre>
      Creating a virtualenv for this project...
