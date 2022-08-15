@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, CHAR, VARCHAR, ForeignKey
+from sqlalchemy import Column, Integer, CHAR, VARCHAR, ForeignKey, FetchedValue
 from sqlalchemy.orm import relationship
 
 from .base import Base
@@ -11,7 +11,7 @@ class Chip(Base):
     wafer_id = Column(Integer, ForeignKey('wafer.id'))
     wafer = relationship("Wafer", back_populates='chips')
     name = Column(VARCHAR(length=20))
-    type = Column(CHAR(length=1))
+    type = Column(CHAR(length=1), server_default=FetchedValue())
     iv_measurements = relationship("IVMeasurement", back_populates='chip')
 
     @property
