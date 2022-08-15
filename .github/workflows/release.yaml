@@ -25,12 +25,11 @@ jobs:
 #      - uses: actions/upload-artifact@v2
 #        with:
 #          path: dist/*
-      - uses: actions/checkout@master
       - name: Archive Release
         uses: thedoctor0/zip-release@main
         with:
           type: 'zip'
-          path: 'dist'
+          path: './dist/analyzing'
           filename: 'analyzing.zip'
 
 #      - name: Create Release
@@ -56,5 +55,5 @@ jobs:
       - name: Upload Release
         uses: ncipollo/release-action@v1
         with:
-          artifacts: "release.zip"
+          artifacts: "analyzing.zip"
           token: ${{ secrets.GITHUB_TOKEN }}
