@@ -1,5 +1,6 @@
 import re
 from time import sleep
+from typing import Sequence
 
 import click
 import numpy as np
@@ -13,26 +14,28 @@ from orm import IVMeasurement, Wafer, Chip
 from utils import logger
 
 
-def validate_chip_name(ctx, param, value):
+def validate_chip_names(ctx, param, chip_names: Sequence[str]):
     chip_types = ['C', 'E', 'F', 'G', 'U', 'V', 'X', 'Y']
     matcher = re.compile(rf'[{"".join(chip_types)}]\d{{4}}')
-    for chip_name in value:
+    valid_chip_names = []
+    for chip_name in map(lambda name: name.upper(), chip_names):
         if not matcher.match(chip_name):
             raise click.BadParameter(
                 f'{chip_name} is not valid chip name. It must be in format LXXXX where L is a letter ({", ".join(chip_types)}) and XXXX is a number.')
-    return value
+        valid_chip_names.append(chip_name)
+    return valid_chip_names
 
 
 @click.command(name='iv', help='Measure IV data of the current chip.')
 @click.pass_context
 @click.option("-c", "--config", "config_path", prompt="Config file path",
               type=click.Path(exists=True))
-@click.option("-n", "--chip-name", "chip_names", help="Chip name.", callback=validate_chip_name,
+@click.option("-n", "--chip-name", "chip_names", help="Chip name.", callback=validate_chip_names,
               multiple=True, default=[])
 @click.option("-w", "--wafer", "wafer_name", prompt=f"Input wafer name", help="Wafer name.")
 @click.option("-s", "--chip-state", "chip_state", prompt="Input chip state",
               help="State of the chips.")
-def iv(ctx: click.Context, config_path: str, chip_names: tuple[str], wafer_name: str,
+def iv(ctx: click.Context, config_path: str, chip_names: list[str], wafer_name: str,
        chip_state: str):
     with click.open_file(config_path) as config_file:
         configs = yaml.safe_load(config_file)
@@ -49,13 +52,13 @@ def iv(ctx: click.Context, config_path: str, chip_names: tuple[str], wafer_name:
         .options(joinedload(Wafer.chips)).one_or_none()
 
     if len(configs['chips']) != len(chip_names):
-        chip_names = list(chip_names)
         if len(chip_names) > 0:
             logger.warning(
                 f"Number of chip names does not match number of chips in config file. {len(configs['chips'])} chip names expected")
         for i in range(len(configs['chips']) - len(chip_names)):
             chip_name = click.prompt(f"Input chip name {i + 1}", type=str)
-            chip_names.append(chip_name)
+
+            chip_names.extend(validate_chip_names(ctx, ..., [chip_name]))
 
     if wafer is None:
         chips = [Chip(name=chip_name) for chip_name in chip_names]
@@ -70,13 +73,13 @@ def iv(ctx: click.Context, config_path: str, chip_names: tuple[str], wafer_name:
     session.commit()
 
     for measurement_config in configs['measurements']:
-        logger.info(f'Executing config {measurement_config["name"]}')
+        logger.info(f'Executing measurement {measurement_config["name"]}')
         set_configs(instrument, measurement_config['instrument'])
 
         if measurement_config['program'].get('minimum'):
             raw_measurements = get_minimal_measurements(instrument, configs['queries'])
         else:
-            raw_measurements = get_measurements(instrument, configs['queries'])
+            raw_measurements = get_raw_measurements(instrument, configs['queries'])
 
         for chip_name, chip_config in zip(chip_names, configs['chips'], strict=True):
             chip_id = next(chip.id for chip in wafer.chips if chip.name == chip_name)
@@ -103,7 +106,7 @@ def set_configs(instrument: GPIBInstrument, configs: list[dict]):
         instrument.write(f"{config_name} {config_value}")
 
 
-def get_measurements(instrument: GPIBInstrument, configs: list[dict]) -> dict[str, list]:
+def get_raw_measurements(instrument: GPIBInstrument, configs: list[dict]) -> dict[str, list]:
     # starts the single measurement operation
     instrument.write(":PAGE:SCON:SING")
     # starts monitoring pending operations and sets/clears the Operation complete
@@ -144,7 +147,7 @@ def get_minimal_measurements(instrument: GPIBInstrument, configs: list[dict]):
 
     prev_measurements: dict[str, list] = dict()
     while True:
-        raw_measurements = get_measurements(instrument, configs)
+        raw_measurements = get_raw_measurements(instrument, configs)
         xdata = raw_measurements['voltage']
         if 'anode_current' in raw_measurements:
             ydata = raw_measurements['anode_current']
