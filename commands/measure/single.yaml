@@ -88,7 +88,7 @@ measurements:
       - :PAGE:DISP:LIST: "'V3','I1','I3'"  # selects the variable names for LIST display
     program:
       validation:
-        anode_current[-2]:
+        anode_current[-3]:
           min:
             value: !!float 5e-3
             message: Current leakage is too low. Check if there is a good contact.
