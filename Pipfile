@@ -20,6 +20,7 @@ pyvisa-sim = "*"
 yoctopuce = "*"
 scipy = "*"
 jsonpath-ng = "*"
+pyinstaller = "*"
 
 [dev-packages]
 
