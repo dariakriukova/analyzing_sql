@@ -47,7 +47,7 @@ measurements:
     program:
       minimum: true
       validation:
-        anode_current:
+        anode_current[0]:
           min:
             value: !!float 1e-13
             message: Current leakage is too low. Check if there is a good contact.

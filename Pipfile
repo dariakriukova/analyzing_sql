@@ -19,6 +19,7 @@ pyyaml = "*"
 pyvisa-sim = "*"
 yoctopuce = "*"
 scipy = "*"
+jsonpath-ng = "*"
 
 [dev-packages]
 

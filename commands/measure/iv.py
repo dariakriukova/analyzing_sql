@@ -6,6 +6,7 @@ from typing import Sequence
 import click
 import numpy as np
 import yaml
+from jsonpath_ng import parse
 from pyvisa.resources import GPIBInstrument
 from scipy.optimize import curve_fit
 from sqlalchemy.orm import Session, joinedload
@@ -17,7 +18,7 @@ from utils import logger
 
 def validate_chip_names(ctx, param, chip_names: Sequence[str]):
     chip_types = ['C', 'E', 'F', 'G', 'U', 'V', 'X', 'Y']
-    matcher = re.compile(rf'[{"".join(chip_types)}]\d{{4}}')
+    matcher = re.compile(rf'^[{"".join(chip_types)}]\d{{4}}$')
     valid_chip_names = []
     for chip_name in map(lambda name: name.upper(), chip_names):
         if not matcher.match(chip_name):
@@ -85,7 +86,7 @@ def iv(ctx: click.Context, config_path: str, chip_names: list[str], wafer_name: 
         if measurement_config['program'].get('validation'):
             validation_config = measurement_config['program']['validation']
             if not validate_raw_measurements(raw_measurements, validation_config):
-                logger.info('\n' + pprint.pformat(raw_measurements))
+                logger.info('\n' + pprint.pformat(raw_measurements, compact=True, indent=4))
                 click.confirm("Do you want to save these measurements?", abort=True, default=True)
 
         for chip_name, chip_config in zip(chip_names, configs['chips'], strict=True):
@@ -132,28 +133,21 @@ def validate_raw_measurements(measurements: dict[str, list],
                               configs: dict[str, dict[dict]]) -> bool:
     for value_name, config in configs.items():
         for validator_name, rules in config.items():
-            values = np.array(measurements[value_name])
-            if rules.get('abs'):
-                values = np.abs(values)
-            if validator_name == 'min':
-                if any(values < rules['value']):
-                    logger.warning(rules['message'])
-                    return False
-            elif validator_name == 'max':
-                if any(values > rules['value']):
-                    logger.warning(rules['message'])
-                    return False
-            else:
-                raise ValueError(f'Unknown validator {validator_name}')
-
-    for name, values in measurements.items():
-        if 'current' in name:
-            if any(np.log10(np.abs(values)) < -13):
-                logger.warning(f'Current leakage is too low. Check if there is a good contact')
-                return False
-            if any(np.log10(np.abs(values)) > -9):
-                logger.warning(f'Current leakage is too high. Check if there is a light exposure')
-                return False
+            path = parse(value_name)
+            for ctx in path.find(measurements):
+                value = ctx.value
+                if rules.get('abs'):
+                    value = abs(value)
+                if validator_name == 'min':
+                    if value < rules['value']:
+                        logger.warning(rules['message'])
+                        return False
+                elif validator_name == 'max':
+                    if value > rules['value']:
+                        logger.warning(rules['message'])
+                        return False
+                else:
+                    raise ValueError(f'Unknown validator {validator_name}')
     return True
 
 
