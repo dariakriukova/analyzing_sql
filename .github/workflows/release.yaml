@@ -1,0 +1,42 @@
+on:
+  push:
+    tags:
+      - '*'
+
+
+name: Create Release
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+        with:
+          python-version: '3.10'
+          cache: 'pipenv'
+
+      - run: pip install pipenv
+      - run: pipenv install --dev
+      - run: pipenv run pyinstaller analyzing.py
+        id: pyinstaller
+      - run: pipenv run pip freeze
+      - run: ./dist/analyzing/analyzing.exe --help # TODO: make real tests instead
+      - name: Archive Release
+        uses: thedoctor0/zip-release@main
+        with:
+          type: 'zip'
+          path: './dist/analyzing/*'
+          filename: 'analyzing.zip'
+      - run: echo $env:GITHUB_REF_NAME > ./version.txt
+      - name: Add version file
+        uses: actions/upload-artifact@v3
+        with:
+          name: version
+          path: "./version.txt"
+      - name: Upload Release
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: "analyzing.zip,version.txt"
+          token: ${{ secrets.GITHUB_TOKEN }}

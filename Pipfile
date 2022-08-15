@@ -4,24 +4,29 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-sqlalchemy = "==1.4.39"
-mysqlclient = "==2.1.1"
-keyring = "==23.7.0"
-pandas = "==1.4.3"
 click = "==8.1.3"
-openpyxl = "*"
-pywin32 = { version = "*", sys_platform = "== 'win32'" }
-matplotlib = "*"
-numpy = "*"
-sentry-sdk = "*"
-pyvisa = "*"
-pyyaml = "*"
-pyvisa-sim = "*"
-yoctopuce = "*"
-scipy = "*"
 jsonpath-ng = "*"
+keyring = "==23.7.0"
+matplotlib = "*"
+mysqlclient = "==2.1.1"
+numpy = "*"
+openpyxl = "*"
+pandas = "==1.4.3"
+pyvisa = "*"
+pywin32 = { version = "*", sys_platform = "== 'win32'" }
+pyyaml = "*"
+scipy = "*"
+sentry-sdk = "*"
+sqlalchemy = "==1.4.39"
+yoctopuce = "*"
 
 [dev-packages]
+colorama = { version = "*", sys_platform = "== 'win32'" }
+pefile = { version = "*", sys_platform = "== 'win32'" }
+pyinstaller = "*"
+pyvisa-sim = "*"
+pywin32-ctypes = { version = "*", sys_platform = "== 'win32'" }
+
 
 [requires]
 python_version = "3.10"
