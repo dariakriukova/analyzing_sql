@@ -28,13 +28,25 @@ def validate_chip_names(ctx, param, chip_names: Sequence[str]):
     return valid_chip_names
 
 
+def validate_wafer_name(ctx, param, wafer_name: str):
+    wafer_name = wafer_name.upper()
+    if wafer_name == 'TEST':
+        return wafer_name
+    matcher = re.compile(r'^\w{2,3}\d{1,2}$')
+    if not matcher.match(wafer_name):
+        raise click.BadParameter(
+            f'{wafer_name} is not valid wafer name. It must be in format LLX(X) where L is a letter and X is a number.')
+    return wafer_name
+
+
 @click.command(name='iv', help='Measure IV data of the current chip.')
 @click.pass_context
 @click.option("-c", "--config", "config_path", prompt="Config file path",
               type=click.Path(exists=True))
 @click.option("-n", "--chip-name", "chip_names", help="Chip name.", callback=validate_chip_names,
               multiple=True, default=[])
-@click.option("-w", "--wafer", "wafer_name", prompt=f"Input wafer name", help="Wafer name.")
+@click.option("-w", "--wafer", "wafer_name", prompt=f"Input wafer name",
+              callback=validate_wafer_name, help="Wafer name.")
 @click.option("-s", "--chip-state", "chip_state", prompt="Input chip state",
               help="State of the chips.")
 def iv(ctx: click.Context, config_path: str, chip_names: list[str], wafer_name: str,
