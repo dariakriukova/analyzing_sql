@@ -1,8 +1,7 @@
-import subprocess
 from decimal import Decimal
 from os.path import exists as file_exists
 from time import strftime, localtime
-from typing import Union
+from typing import Union, Any
 
 import click
 import numpy as np
@@ -11,6 +10,8 @@ from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from matplotlib.ticker import MaxNLocator
+from openpyxl.formatting.rule import CellIsRule
+from openpyxl.styles import PatternFill
 from sqlalchemy.orm import Session, joinedload
 
 from orm import IVMeasurement, Wafer, Chip
@@ -53,8 +54,7 @@ def summary(ctx: click.Context, chips_type: Union[str, None], wafer_name: str, f
         logger.error('No measurements found.')
         return
 
-    data = get_summary_data(measurements)
-
+    sheets_data = get_sheets_data(measurements)
     plot_summary_voltages = list(map(Decimal, ["0.01", "5"]))
     fig = plot_data(measurements, plot_summary_voltages, outliers_coefficient=outliers_coefficient)
 
@@ -65,24 +65,92 @@ def summary(ctx: click.Context, chips_type: Union[str, None], wafer_name: str, f
 
     exel_file_name = file_name + '.xlsx'
     check_file_exists(exel_file_name)
-    with pd.ExcelWriter(exel_file_name) as writer:
-        info = get_info(ctx, wafer=wafer, chip_states=chip_states)
-        excel_summary_voltages = list(map(Decimal, ["-1", "0.01", "5", "10", "20"]))
-        data[excel_summary_voltages].to_excel(writer, sheet_name='Summary')
-        data.to_excel(writer, sheet_name='All')
-        info.to_excel(writer, sheet_name='Info')
+    info = get_info(ctx, wafer=wafer, chip_states=chip_states)
+    save_summary_to_excel(sheets_data, info, exel_file_name)
+
     logger.info(f'Summary data is saved to {exel_file_name}')
 
 
-def get_summary_data(measurements: list[IVMeasurement, ...]) -> pd.DataFrame:
-    chip_names = {measurement.chip.name for measurement in measurements}
+def save_summary_to_excel(sheets_data: dict[str, pd.DataFrame], info: pd.Series, file_name: str):
+    with pd.ExcelWriter(file_name) as writer:
+        summary_voltages = list(map(Decimal, ["-1", "0.01", "5", "10", "20"]))
+        summary_df = sheets_data['anode'][summary_voltages].rename(columns=float)
+        summary_df.to_excel(writer, sheet_name='Summary')
+        summary_sheet = writer.book["Summary"]
+        red_fill = PatternFill(bgColor='ee9090', fill_type='solid')
+        green_fill = PatternFill(bgColor='90ee90', fill_type='solid')
+
+        chips_row_numbers = [(i + 2, name) for i, name in enumerate(sheets_data['chip_names'])]
+
+        for chip_type in sheets_data['chip_types']:
+
+            def is_current_type(chip_name: str) -> bool:
+                return chip_name.startswith(chip_type)
+
+            if chip_type == "X":
+                thresholds = {'-1': 1e-3, '0.01': -12e-12, '10': -80e-12, '20': -500e-12}
+            elif chip_type == 'Y':
+                thresholds = {'-1': 1e-3, '0.01': -15e-12, '10': -120e-12, '20': -1000e-12}
+            elif chip_type == 'U':
+                thresholds = {'-1': 1e-3, '0.01': -30e-12, '10': -200e-12, '20': -1200e-12}
+            elif chip_type == 'V':
+                thresholds = {'-1': 1e-3, '0.01': -60e-12, '10': -800e-12, '20': -1400e-12}
+            elif chip_type == 'F':
+                thresholds = {'-1': 5e-3, '0.01': -40e-12, '10': -2e-9, }
+            elif chip_type == 'G':
+                thresholds = {'-1': 5e-3, '0.01': -50e-12, '10': -2e-9, }
+            elif chip_type == 'E':
+                thresholds = {'-1': 5e-3, '0.01': -20e-12, '10': -2e-9, }
+            elif chip_type == 'C':
+                thresholds = {'-1': 1e-3, '0.01': -20e-12, '10': -1e-9, }
+
+            for voltage, current_threshold in thresholds.items():
+                try:
+                    column_index = summary_voltages.index(Decimal(voltage))
+
+                    first_row_index = next(i for i, v in chips_row_numbers if is_current_type(v))
+                    last_row_index = next(
+                        i for i, v in reversed(chips_row_numbers) if is_current_type(v))
+                except ValueError:
+                    continue
+
+                column_letter = chr(ord('B') + column_index)
+                cell_range = f'{column_letter}{first_row_index}:{column_letter}{last_row_index}'
+                summary_sheet.conditional_formatting \
+                    .add(cell_range, CellIsRule(operator='lessThan', formula=[current_threshold],
+                                                fill=red_fill))
+                summary_sheet.conditional_formatting \
+                    .add(cell_range,
+                         CellIsRule(operator='greaterThanOrEqual', formula=[current_threshold],
+                                    fill=green_fill))
+
+        # summary_sheet.
+
+        sheets_data['anode'].rename(columns=float).to_excel(writer, sheet_name='I1 anode')
+        sheets_data['cathode'].rename(columns=float).to_excel(writer, sheet_name='I3 cathode')
+        info.to_excel(writer, sheet_name='Info')
+
+
+def get_sheets_data(measurements: list[IVMeasurement]) -> dict[str, Union[pd.DataFrame, Any]]:
+    chip_names = sorted({measurement.chip.name for measurement in measurements})
+    chip_types = sorted({measurement.chip.type for measurement in measurements})
     voltages = {measurement.voltage_input for measurement in measurements}
-    df = pd.DataFrame(dtype='float64', index=sorted(chip_names), columns=sorted(voltages))
+    anode_df = pd.DataFrame(dtype='float64', index=chip_names, columns=voltages)
+    cathode_df = pd.DataFrame(dtype='float64', index=chip_names, columns=voltages)
     with click.progressbar(measurements, label='Processing measurements...') as progress:
         for measurement in progress:
-            df.loc[measurement.chip.name,
-                   measurement.voltage_input] = measurement.anode_current_corrected
-    return df
+            measurement: IVMeasurement
+            anode_df.loc[
+                measurement.chip.name, measurement.voltage_input] = measurement.anode_current_corrected
+            cathode_df.loc[
+                measurement.chip.name, measurement.voltage_input] = measurement.cathode_current
+    return {
+        'anode': anode_df,
+        'cathode': cathode_df,
+        'chip_names': chip_names,
+        'chip_types': chip_types,
+        'voltages': voltages
+    }
 
 
 def get_info(ctx: click.Context, wafer: Wafer, chip_states: list[str]) -> pd.Series:
