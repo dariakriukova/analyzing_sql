@@ -103,6 +103,8 @@ def save_summary_to_excel(sheets_data: dict[str, pd.DataFrame], info: pd.Series,
                 thresholds = {'-1': 5e-3, '0.01': -20e-12, '10': -2e-9, }
             elif chip_type == 'C':
                 thresholds = {'-1': 1e-3, '0.01': -20e-12, '10': -1e-9, }
+            else:
+                continue
 
             for voltage, current_threshold in thresholds.items():
                 try:
