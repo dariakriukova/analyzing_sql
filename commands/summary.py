@@ -154,12 +154,6 @@ def get_sheets_data(measurements: list[IVMeasurement]) -> dict[str, Union[pd.Dat
 
 
 def get_info(ctx: click.Context, wafer: Wafer, chip_states: list[str]) -> pd.Series:
-    try:
-        process = subprocess.Popen(['git', 'rev-parse', 'HEAD'], shell=False,
-                                   stdout=subprocess.PIPE)
-        git_hash = process.communicate()[0].strip()
-    except FileNotFoundError:
-        git_hash = 'unknown'
     format_date = strftime("%A, %d %b %Y", localtime())
     if 'all' in chip_states:
         chip_states_str = 'all'
@@ -170,7 +164,6 @@ def get_info(ctx: click.Context, wafer: Wafer, chip_states: list[str]) -> pd.Ser
     return pd.Series({
         'Wafer': wafer.name,
         'Summary generation date': format_date,
-        'Analyzer git hash': git_hash,
         'Chip state': chip_states_str,
     })
 
