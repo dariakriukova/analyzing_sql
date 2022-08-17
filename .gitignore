@@ -160,4 +160,5 @@ cython_debug/
 .idea/
 
 # Project-specific files
-/output.xlsx
+/*.xlsx
+/*.png
