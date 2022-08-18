@@ -3,6 +3,7 @@ from typing import Union
 
 import click
 import keyring
+import sentry_sdk
 import pyvisa
 from pyvisa import Error
 from sqlalchemy import create_engine
@@ -39,8 +40,13 @@ def measure(ctx: click.Context, log_level: str, db_url: Union[str, None], simula
         ctx.with_resource(session)
         chip_states = session.query(ChipState).all()
 
-    except OperationalError:
-        logger.warn(f"Database credentials are not set. Try running {set_db.name}.")
+    except OperationalError as e:
+        if 'Access denied' in str(e):
+            logger.warn(
+                f"Access denied to database. Try again or run {set_db.name} command to set new credentials.")
+        else:
+            logger.error(f"Error connecting to database: {e}")
+            sentry_sdk.capture_exception(e)
         exit()
         return
 

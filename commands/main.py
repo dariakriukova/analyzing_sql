@@ -3,6 +3,7 @@ from typing import Union
 
 import click
 import keyring
+import sentry_sdk
 from sqlalchemy import create_engine, desc
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
@@ -43,6 +44,11 @@ def main(ctx: click.Context, log_level: str, db_url: Union[str, None]):
             chip_state_option.help = chip_state_option.help + "\n\n" + "\n".join(
                 ["{} - {};".format(state.id, state.name) for state in chip_states])
             ctx.obj = {'session': session, 'default_wafer': last_wafer, 'chip_states': chip_states}
-        except OperationalError:
-            click.echo(f"Database credentials are not set. Try running {set_db.name}.")
+        except OperationalError as e:
+            if 'Access denied' in str(e):
+                logger.warn(
+                    f"Access denied to database. Try again or run {set_db.name} command to set new credentials.")
+            else:
+                logger.error(f"Error connecting to database: {e}")
+                sentry_sdk.capture_exception(e)
             exit()
