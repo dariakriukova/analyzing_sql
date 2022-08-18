@@ -15,7 +15,7 @@ sentry_sdk.init(
 if frozen:
     os.environ['MPLCONFIGDIR'] = str(pathlib.Path(__file__).parent / 'matplotlib' / 'appdata')
 
+from analyzing import analyzing
 
 if __name__ == '__main__':
-    from commands import main
-    main()
+    analyzing()

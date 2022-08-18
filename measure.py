@@ -8,7 +8,7 @@ sentry_sdk.init(
     environment="development" if os.getenv("DEV", False) else "pipenv",
 )
 
-from commands.measure import measure
+from measure import measure
 
 if __name__ == '__main__':
     measure()

@@ -20,7 +20,7 @@ from .summary import summary
               type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
                                 case_sensitive=False))
 @click.option("--db-url", help="Database URL.")
-def main(ctx: click.Context, log_level: str, db_url: Union[str, None]):
+def analyzing(ctx: click.Context, log_level: str, db_url: Union[str, None]):
     logger.setLevel(log_level)
     if ctx.invoked_subcommand == summary.name:
         try:

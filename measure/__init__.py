@@ -13,7 +13,6 @@ from sqlalchemy.orm import Session
 from orm import ChipState
 from utils import logger, get_db_url
 from .iv import iv
-from .. import set_db
 
 
 @click.group(commands=[iv])
@@ -43,7 +42,7 @@ def measure(ctx: click.Context, log_level: str, db_url: Union[str, None], simula
     except OperationalError as e:
         if 'Access denied' in str(e):
             logger.warn(
-                f"Access denied to database. Try again or run {set_db.name} command to set new credentials.")
+                f"Access denied to database. Try again or run set-db command to set new credentials.")
         else:
             logger.error(f"Error connecting to database: {e}")
             sentry_sdk.capture_exception(e)
@@ -59,7 +58,7 @@ def measure(ctx: click.Context, log_level: str, db_url: Union[str, None], simula
 
     try:
         if simulate:
-            rm = pyvisa.ResourceManager('commands/measure/simulation.yaml@sim')
+            rm = pyvisa.ResourceManager('measure/simulation.yaml@sim')
             instrument = rm.open_resource('GPIB0::9::INSTR',
                                           write_termination='\n',
                                           read_termination='\n')
