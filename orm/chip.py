@@ -3,6 +3,7 @@ from sqlalchemy.orm import relationship
 
 from .base import Base
 
+import pandas as pd
 
 class Chip(Base):
     __tablename__ = 'chip'
@@ -21,3 +22,9 @@ class Chip(Base):
     @property
     def y_coordinate(self):
         return int(self.name[3:5])
+
+    def to_series(self) -> pd.Series:
+        return pd.Series({
+            'Name': self.name,
+            'Wafer': self.wafer.name,
+        })

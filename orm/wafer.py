@@ -2,6 +2,7 @@ from sqlalchemy import Column, INTEGER, VARCHAR, DATETIME, FetchedValue
 from sqlalchemy.orm import relationship
 
 from .base import Base
+import pandas as pd
 
 
 class Wafer(Base):
@@ -11,4 +12,11 @@ class Wafer(Base):
     name = Column(VARCHAR(length=20))
     chips = relationship("Chip", back_populates='wafer')
     # TODO: rename to record_created_at
-    created_at = Column(DATETIME, server_default=FetchedValue())
+    created_at = Column(DATETIME, server_default=FetchedValue(), name='record_created_at')
+
+    def to_series(self) -> pd.Series:
+        return pd.Series({
+            'Name': self.name,
+            'Created at': self.created_at,
+            'Number of chips': len(self.chips)
+        })
