@@ -65,7 +65,7 @@ def summary(ctx: click.Context, chips_type: Union[str, None], wafer_name: str, f
 
     exel_file_name = file_name + '.xlsx'
     check_file_exists(exel_file_name)
-    info = get_info(ctx, wafer=wafer, chip_states=chip_states)
+    info = get_info(ctx, wafer=wafer, chip_states=chip_states, measurements=measurements)
     save_summary_to_excel(sheets_data, info, exel_file_name)
 
     logger.info(f'Summary data is saved to {exel_file_name}')
@@ -155,7 +155,8 @@ def get_sheets_data(measurements: list[IVMeasurement]) -> dict[str, Union[pd.Dat
     }
 
 
-def get_info(ctx: click.Context, wafer: Wafer, chip_states: list[str]) -> pd.Series:
+def get_info(ctx: click.Context, wafer: Wafer, chip_states: list[str],
+             measurements: list[IVMeasurement]) -> pd.Series:
     format_date = strftime("%A, %d %b %Y", localtime())
     if 'all' in chip_states:
         chip_states_str = 'all'
@@ -163,10 +164,15 @@ def get_info(ctx: click.Context, wafer: Wafer, chip_states: list[str]) -> pd.Ser
         chip_states_str = "; ".join(
             [state.name for state in ctx.obj['chip_states'] if str(state.id) in chip_states])
 
+    first_measurement = min(measurements, key=lambda m: m.datetime)
+    last_measurement = max(measurements, key=lambda m: m.datetime)
+
     return pd.Series({
         'Wafer': wafer.name,
         'Summary generation date': format_date,
         'Chip state': chip_states_str,
+        "First measurement date": first_measurement.datetime,
+        "Last measurement date": last_measurement.datetime,
     })
 
 
