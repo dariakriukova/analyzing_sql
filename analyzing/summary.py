@@ -1,3 +1,4 @@
+from datetime import datetime
 from decimal import Decimal
 from os.path import exists as file_exists
 from time import strftime, localtime
@@ -17,6 +18,9 @@ from sqlalchemy.orm import Session, joinedload
 from orm import IVMeasurement, Wafer, Chip
 from utils import logger
 
+date_formats = ['%Y-%m-%dT%H:%M:%S', '%Y-%m-%d']
+date_formats_help = f"Supported formats are: {', '.join((strftime(f) for f in date_formats))}."
+
 
 @click.command(name='summary', help="Make summary files (png and xlsx) for IV measurements' data.")
 @click.pass_context
@@ -28,9 +32,12 @@ from utils import logger
               default=['all'], show_default=True, multiple=True)
 @click.option("--outliers-coefficient", default=2.0, show_default=True,
               help="Standard deviation multiplier to detect outlier measurements.", type=float)
+@click.option("--before", type=click.DateTime(formats=date_formats),
+              help=f"Include measurements before (inclusive) provided date and time. {date_formats_help}")
+@click.option("--after", type=click.DateTime(formats=date_formats),
+              help=f"Include measurements after (inclusive) provided date and time. {date_formats_help}")
 def summary(ctx: click.Context, chips_type: Union[str, None], wafer_name: str, file_name: str,
-            chip_states: list[str],
-            outliers_coefficient: float):
+            chip_states: list[str], outliers_coefficient: float, before: datetime, after: datetime):
     session: Session = ctx.obj['session']
     if ctx.obj['default_wafer'].name != wafer_name:
         wafer = session.query(Wafer).filter(Wafer.name == wafer_name).first()
@@ -43,15 +50,18 @@ def summary(ctx: click.Context, chips_type: Union[str, None], wafer_name: str, f
     if chips_type is not None:
         query = query.filter(IVMeasurement.chip.has(Chip.type.__eq__(chips_type)))
     else:
-        logger.info('No chips type specified. Analyzing all chips.')
+        logger.info('Chips type (-t or --chips-type) is not specified. Analyzing all chip types.')
 
     if 'all' not in chip_states:
         query = query.filter(IVMeasurement.chip_state_id.in_(chip_states))
 
+    if before is not None or after is not None:
+        query = query.filter(IVMeasurement.datetime.between(after, before))
+
     measurements = query.all()
 
     if not measurements:
-        logger.error('No measurements found.')
+        logger.warn('No measurements found.')
         return
 
     sheets_data = get_sheets_data(measurements)
