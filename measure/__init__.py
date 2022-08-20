@@ -1,10 +1,11 @@
 import logging
+import sys
 from typing import Union
 
 import click
 import keyring
-import sentry_sdk
 import pyvisa
+import sentry_sdk
 from pyvisa import Error
 from sqlalchemy import create_engine
 from sqlalchemy.exc import OperationalError
@@ -46,8 +47,7 @@ def measure(ctx: click.Context, log_level: str, db_url: Union[str, None], simula
         else:
             logger.error(f"Error connecting to database: {e}")
             sentry_sdk.capture_exception(e)
-        exit()
-        return
+        sys.exit()
 
     chip_state_option = next((o for o in iv.params if o.name == 'chip_state'))
     chip_state_option.type = click.Choice([str(state.id) for state in chip_states])
@@ -70,7 +70,6 @@ def measure(ctx: click.Context, log_level: str, db_url: Union[str, None], simula
         instrument.timeout = 250000  # If error "Timeout is expired" appears, this value can be increased
     except Error as e:
         logger.error(f"PYVISA error: {e}")
-        exit()
-        return
+        sys.exit()
 
     ctx.obj['instrument'] = instrument

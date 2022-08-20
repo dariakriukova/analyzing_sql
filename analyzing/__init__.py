@@ -1,4 +1,5 @@
 import logging
+import sys
 from typing import Union
 
 import click
@@ -42,8 +43,7 @@ def analyzing(ctx: click.Context, log_level: str, db_url: Union[str, None]):
             else:
                 logger.error(f"Error connecting to database: {e}")
                 sentry_sdk.capture_exception(e)
-            exit()
-            return
+            sys.exit()
 
         if ctx.invoked_subcommand == summary.name:
             last_wafer = session.query(Wafer).order_by(desc(Wafer.created_at)).first()
