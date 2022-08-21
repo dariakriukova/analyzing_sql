@@ -1,9 +1,9 @@
+import pandas as pd
 from sqlalchemy import Column, Integer, CHAR, VARCHAR, ForeignKey, FetchedValue
 from sqlalchemy.orm import relationship
 
 from .base import Base
 
-import pandas as pd
 
 class Chip(Base):
     __tablename__ = 'chip'

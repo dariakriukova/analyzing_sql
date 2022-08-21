@@ -11,7 +11,16 @@
             "program": "measure.py",
             "console": "integratedTerminal",
             "justMyCode": true,
-            "args": ["iv", "--config", "commands/measure/single.yaml", "-w", "TEST", "-s", "1", "-n", "X1033"]
+            "args": ["iv", "--config", "measure/single.yaml", "-w", "TEST", "-s", "1", "-n", "X1033"]
+        },
+        {
+            "name": "Parse dat files",
+            "type": "python",
+            "request": "launch",
+            "program": "analyzing.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": ["parse"]
         }
     ]
 }
