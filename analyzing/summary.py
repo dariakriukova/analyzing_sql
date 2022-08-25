@@ -199,24 +199,6 @@ def check_file_exists(file_name: str):
             break
 
 
-def get_heat_map_data(measurements: list[IVMeasurement, ...]) -> dict:
-    xs, ys = [], []
-
-    for measurement in measurements:
-        xs.append(measurement.chip.x_coordinate)
-        ys.append(measurement.chip.y_coordinate)
-
-    borders = {'left': min(xs), 'right': max(xs), 'bottom': min(ys), 'top': max(ys)}
-    width = borders['right'] - borders['left'] + 1
-    height = borders['top'] - borders['bottom'] + 1
-    data = np.full((height, width), np.nan)
-    for measurement in measurements:
-        data[
-            measurement.chip.y_coordinate - borders['bottom']][
-            measurement.chip.x_coordinate - borders['left']] = measurement.anode_current_corrected
-    return {'data': data, 'borders': borders}
-
-
 def get_outliers_idx(data: np.ndarray, m: float) -> np.ndarray:
     return np.abs(data - np.nanmedian(data)) > m * np.nanstd(data)
 
