@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, date
 from decimal import Decimal
 from os.path import exists as file_exists
 from time import strftime, localtime
@@ -33,11 +33,12 @@ date_formats_help = f"Supported formats are: {', '.join((strftime(f) for f in da
 @click.option("--outliers-coefficient", default=2.0, show_default=True,
               help="Standard deviation multiplier to detect outlier measurements.", type=float)
 @click.option("--before", type=click.DateTime(formats=date_formats),
-              help=f"Include measurements before (inclusive) provided date and time. {date_formats_help}")
+              help=f"Include measurements before (exclusive) provided date and time. {date_formats_help}")
 @click.option("--after", type=click.DateTime(formats=date_formats),
               help=f"Include measurements after (inclusive) provided date and time. {date_formats_help}")
 def summary(ctx: click.Context, chips_type: Union[str, None], wafer_name: str, file_name: str,
-            chip_states: list[str], outliers_coefficient: float, before: datetime, after: datetime):
+            chip_states: list[str], outliers_coefficient: float, before: Union[datetime, None],
+            after: Union[datetime, None]):
     session: Session = ctx.obj['session']
     if ctx.obj['default_wafer'].name != wafer_name:
         wafer = session.query(Wafer).filter(Wafer.name == wafer_name).first()
@@ -56,6 +57,8 @@ def summary(ctx: click.Context, chips_type: Union[str, None], wafer_name: str, f
         query = query.filter(IVMeasurement.chip_state_id.in_(chip_states))
 
     if before is not None or after is not None:
+        after = after if after is not None else date.min
+        before = before if before is not None else date.max
         query = query.filter(IVMeasurement.datetime.between(after, before))
 
     measurements = query.all()
