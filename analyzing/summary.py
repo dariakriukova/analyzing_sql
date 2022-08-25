@@ -152,13 +152,19 @@ def get_sheets_data(measurements: list[IVMeasurement]) -> dict[str, Union[pd.Dat
     voltages = {measurement.voltage_input for measurement in measurements}
     anode_df = pd.DataFrame(dtype='float64', index=chip_names, columns=voltages)
     cathode_df = pd.DataFrame(dtype='float64', index=chip_names, columns=voltages)
+    has_uncorrected_current = False
     with click.progressbar(measurements, label='Processing measurements...') as progress:
         for measurement in progress:
             measurement: IVMeasurement
-            anode_df.loc[
-                measurement.chip.name, measurement.voltage_input] = measurement.anode_current_corrected
-            cathode_df.loc[
-                measurement.chip.name, measurement.voltage_input] = measurement.cathode_current
+            cell_location = (measurement.chip.name, measurement.voltage_input)
+            if measurement.anode_current_corrected is None:
+                has_uncorrected_current = True
+                anode_df.loc[cell_location] = measurement.anode_current
+            else:
+                anode_df.loc[cell_location] = measurement.anode_current_corrected
+            cathode_df.loc[cell_location] = measurement.cathode_current
+    if has_uncorrected_current:
+        logger.warning('Some current measurements are not corrected by temperature.')
     return {
         'anode': anode_df,
         'cathode': cathode_df,
@@ -212,7 +218,7 @@ def plot_hist(ax: Axes, data: np.ndarray):
     ax.hist(data * 1e12, bins=15)
 
 
-def plot_heat_map(ax: Axes, measurements: list[IVMeasurement, ...], low, high):
+def plot_heat_map(ax: Axes, measurements: list[IVMeasurement], low, high):
     xs = {measurement.chip.x_coordinate for measurement in measurements}
     ys = {measurement.chip.y_coordinate for measurement in measurements}
 
@@ -220,8 +226,8 @@ def plot_heat_map(ax: Axes, measurements: list[IVMeasurement, ...], low, high):
     height = max(ys) - min(ys) + 1
     grid = np.full((height, width), np.nan)
     for cell in measurements:
-        grid[cell.chip.y_coordinate - min(ys)][
-            cell.chip.x_coordinate - min(xs)] = cell.anode_current_corrected
+        grid[cell.chip.y_coordinate - min(ys)][cell.chip.x_coordinate - min(xs)] = \
+            cell.anode_current_corrected if cell.anode_current_corrected is not None else cell.anode_current
 
     X = np.linspace(min(xs) - 0.5, max(xs) + 0.5, width + 1)
     Y = np.linspace(min(ys) - 0.5, max(ys) + 0.5, height + 1)
@@ -233,8 +239,8 @@ def plot_heat_map(ax: Axes, measurements: list[IVMeasurement, ...], low, high):
     ax.figure.colorbar(mesh, ax=ax)
 
 
-def plot_data(measurements: list[IVMeasurement, ...],
-              summary_voltages: list[Decimal, ...], outliers_coefficient: float) -> Figure:
+def plot_data(measurements: list[IVMeasurement], summary_voltages: list[Decimal],
+              outliers_coefficient: float) -> Figure:
     fig, axes = plt.subplots(nrows=len(summary_voltages), ncols=2,
                              figsize=(10, 5 * len(summary_voltages)),
                              gridspec_kw=dict(left=0.08, right=0.95, bottom=0.05, top=0.95,
@@ -243,7 +249,8 @@ def plot_data(measurements: list[IVMeasurement, ...],
         target_measurements = [measurement for measurement in measurements if
                                measurement.voltage_input == voltage]
         data = np.array(
-            [measurement.anode_current_corrected for measurement in target_measurements])
+            [measurement.anode_current_corrected if measurement.anode_current_corrected
+             else measurement.anode_current for measurement in target_measurements])
 
         outliers_idx = get_outliers_idx(data, outliers_coefficient)
         if outliers_idx.any():
