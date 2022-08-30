@@ -14,6 +14,7 @@ class Chip(Base):
     name = Column(VARCHAR(length=20))
     type = Column(CHAR(length=1), server_default=FetchedValue())
     iv_measurements = relationship("IVMeasurement", back_populates='chip')
+    cv_measurements = relationship("CVMeasurement", back_populates='chip')
 
     @property
     def x_coordinate(self):

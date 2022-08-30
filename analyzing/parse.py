@@ -10,14 +10,14 @@ import click
 import pandas as pd
 from sqlalchemy.orm import Session, joinedload
 
-from orm import IVMeasurement, ChipState, Wafer, Chip
+from orm import IVMeasurement, CVMeasurement, ChipState, Wafer, Chip
 from utils import logger
 
 
-@click.command(name='parse', help="Parse .dat files with IV measurements and save to database")
+@click.command(name='parse-iv', help="Parse .dat files with IV measurements and save to database")
 @click.pass_context
 @click.argument('path_or_glob', type=click.Path(dir_okay=False), default="./*.dat")
-def parse(ctx: click.Context, path_or_glob: str):
+def parse_iv(ctx: click.Context, path_or_glob: str):
     session = ctx.obj['session']
     chip_states = ctx.obj['chip_states']
 
@@ -26,7 +26,27 @@ def parse(ctx: click.Context, path_or_glob: str):
         wafer, chip = ask_chip_and_wafer(file_path, session)
         chip_state = ask_chip_state(chip_states)
         data = parse_file(file_path)
-        measurements = create_measurements(data['data'], data['timestamp'], chip, chip_state)
+        measurements = create_iv_measurements(data['data'], data['timestamp'], chip, chip_state)
+        session.add_all(measurements)
+        session.commit()
+        new_file_name = f'{file_path}.parsed'
+        os.rename(file_path, new_file_name)
+        logger.info(f"{file_path} was renamed to {new_file_name} and saved to database")
+
+
+@click.command(name='parse-cv', help="Parse .dat files with CV measurements and save to database")
+@click.pass_context
+@click.argument('path_or_glob', type=click.Path(dir_okay=False), default="./*.dat")
+def parse_cv(ctx: click.Context, path_or_glob: str, *argc, **kwarg):
+    session = ctx.obj['session']
+    chip_states = ctx.obj['chip_states']
+
+    file_paths = [path_or_glob] if path.isfile(path_or_glob) else glob.iglob(path_or_glob)
+    for file_path in file_paths:
+        wafer, chip = ask_chip_and_wafer(file_path, session)
+        chip_state = ask_chip_state(chip_states)
+        data = parse_file(file_path)
+        measurements = create_cv_measurements(data['data'], data['timestamp'], chip, chip_state)
         session.add_all(measurements)
         session.commit()
         new_file_name = f'{file_path}.parsed'
@@ -35,7 +55,7 @@ def parse(ctx: click.Context, path_or_glob: str):
 
 
 def ask_chip_and_wafer(file_path: str, session: Session) -> (Wafer, Chip):
-    matcher = re.compile(r'^IV\s+(?P<wafer>[\w\d]+)\s+(?P<chip>[\w\d]+)\..*$')
+    matcher = re.compile(r'^(IV|CV)\s+(?P<wafer>[\w\d]+)\s+(?P<chip>[\w\d]+)\..*$')
     filename = path.basename(file_path)
     match = matcher.match(filename)
     if match is None:
@@ -109,7 +129,7 @@ def parse_file(file_path: str) -> dict[str, Union[datetime, pd.DataFrame]]:
         time = datetime.strptime(time_match.group('time'), '%H:%M:%S')
 
     timestamp = datetime.combine(date, datetime.time(time))
-    table_matcher = re.compile(r'^(?P<table>([VIRGNCA]{3}\s?){3,4}$\n[\s\d.E+-]*?)[\n\r]{2}',
+    table_matcher = re.compile(r'^(?P<table>([\w]{1,10}\s?){4}$\n[\s\d.E+-]*?)[\n\r]{2}',
                                re.M | re.I)
     data = pd.DataFrame()
     for match in table_matcher.finditer(content):
@@ -118,7 +138,7 @@ def parse_file(file_path: str) -> dict[str, Union[datetime, pd.DataFrame]]:
     return {'timestamp': timestamp, 'data': data}
 
 
-def create_measurements(data: pd.DataFrame, timestamp: datetime, chip: Chip,
+def create_iv_measurements(data: pd.DataFrame, timestamp: datetime, chip: Chip,
                         chip_state: ChipState) -> Generator[IVMeasurement, None, None]:
     for idx, row in data.iterrows():
         yield IVMeasurement(
@@ -128,4 +148,14 @@ def create_measurements(data: pd.DataFrame, timestamp: datetime, chip: Chip,
             voltage_input=row['VCA'],
             anode_current=row['IAN'],
             cathode_current=row['ICA'],
+            datetime=timestamp)
+
+def create_cv_measurements(data: pd.DataFrame, timestamp: datetime, chip: Chip,
+                        chip_state: ChipState) -> Generator[CVMeasurement, None, None]:
+    for idx, row in data.iterrows():
+        yield CVMeasurement(
+            chip=chip,
+            chip_state=chip_state,
+            voltage_input=row['BIAS'],
+            capacitance=row['C'],
             datetime=timestamp)

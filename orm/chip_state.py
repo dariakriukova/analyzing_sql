@@ -9,4 +9,3 @@ class ChipState(Base):
 
     id = Column(Integer, primary_key=True, nullable=False)
     name = Column(VARCHAR(length=100))
-    iv_measurements = relationship("IVMeasurement", back_populates='chip_state')
