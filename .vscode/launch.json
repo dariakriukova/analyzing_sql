@@ -21,6 +21,15 @@
             "console": "integratedTerminal",
             "justMyCode": true,
             "args": ["parse"]
+        },
+        {
+            "name": "Parse cv dat files",
+            "type": "python",
+            "request": "launch",
+            "program": "analyzing.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": ["parse-cv", ".\\data\\*.dat"]
         }
     ]
 }

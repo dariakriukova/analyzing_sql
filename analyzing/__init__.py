@@ -11,13 +11,13 @@ from sqlalchemy.orm import Session
 
 from orm import Wafer, ChipState
 from utils import logger, get_db_url
-from .parse import parse
+from .parse import parse_iv, parse_cv
 from .set_db import set_db
 from .show import show
 from .summary import summary
 
 
-@click.group(commands=[summary, set_db, show, parse])
+@click.group(commands=[summary, set_db, show, parse_cv, parse_iv])
 @click.pass_context
 @click.option("--log-level", default="INFO", help="Log level.", show_default=True,
               type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
@@ -26,7 +26,7 @@ from .summary import summary
 def analyzing(ctx: click.Context, log_level: str, db_url: Union[str, None]):
     logger.setLevel(log_level)
     ctx.obj = dict()
-    if ctx.invoked_subcommand in [summary.name, show.name, parse.name]:
+    if ctx.invoked_subcommand in (summary.name, show.name, parse_iv.name, parse_cv.name):
         try:
             if db_url is None:
                 db_url = get_db_url(username=keyring.get_password("ELFYS_DB", "USER"),
@@ -46,7 +46,7 @@ def analyzing(ctx: click.Context, log_level: str, db_url: Union[str, None]):
                 sentry_sdk.capture_exception(e)
             sys.exit()
 
-        if ctx.invoked_subcommand in (summary.name, parse.name):
+        if ctx.invoked_subcommand in (summary.name, parse_iv.name, parse_cv.name):
             chip_states = session.query(ChipState).all()
             ctx.obj['chip_states'] = chip_states
 
