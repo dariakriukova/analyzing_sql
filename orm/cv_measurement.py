@@ -17,5 +17,4 @@ class CVMeasurement(Base):
     datetime = Column(DATETIME, server_default=FetchedValue())
 
     def __repr__(self):
-        return "<CVMeasurement(wafer='%s', chip='%s', id='%d')>" % (
-            self.wafer, self.chip, self.id)
+        return "<CVMeasurement(chip='%s', id='%d')>" % (self.chip, self.id)
