@@ -24,12 +24,14 @@ date_formats = ['%Y-%m-%dT%H:%M:%S', '%Y-%m-%d']
 date_formats_help = f"Supported formats are: {', '.join((strftime(f) for f in date_formats))}."
 
 
-@click.command(name='summary', help="Make summary files (png and xlsx) for IV measurements' data.")
+@click.command(name='summary-iv',
+               help="Make summary-iv files (png and xlsx) for IV measurements' data.")
 @click.pass_context
 @click.option("-t", "--chips-type", help="Type of the chips to analyze.")
 @click.option("-w", "--wafer", "wafer_name", prompt=f"Wafer name", help="Wafer name.")
-@click.option("-o", "--output", "file_name", default=lambda: f"summary-{strftime('%y%m%d-%H%M%S')}",
-              help="Output file names without extension.", show_default="summary-{datetime}")
+@click.option("-o", "--output", "file_name",
+              default=lambda: f"summary-iv-{strftime('%y%m%d-%H%M%S')}",
+              help="Output file names without extension.", show_default="summary-iv-{datetime}")
 @click.option("-s", "--chip-state", "chip_states", help="State of the chips to analyze.",
               default=['all'], show_default=True, multiple=True)
 @click.option("--outliers-coefficient", default=2.0, show_default=True,
@@ -38,9 +40,9 @@ date_formats_help = f"Supported formats are: {', '.join((strftime(f) for f in da
               help=f"Include measurements before (exclusive) provided date and time. {date_formats_help}")
 @click.option("--after", type=click.DateTime(formats=date_formats),
               help=f"Include measurements after (inclusive) provided date and time. {date_formats_help}")
-def summary(ctx: click.Context, chips_type: Union[str, None], wafer_name: str, file_name: str,
-            chip_states: list[str], outliers_coefficient: float, before: Union[datetime, None],
-            after: Union[datetime, None]):
+def summary_iv(ctx: click.Context, chips_type: Union[str, None], wafer_name: str, file_name: str,
+               chip_states: list[str], outliers_coefficient: float, before: Union[datetime, None],
+               after: Union[datetime, None]):
     session: Session = ctx.obj['session']
     if ctx.obj['default_wafer'].name != wafer_name:
         wafer = session.query(Wafer).filter(Wafer.name == wafer_name).first()
@@ -72,7 +74,8 @@ def summary(ctx: click.Context, chips_type: Union[str, None], wafer_name: str, f
     sheets_data = get_sheets_data(measurements)
     plot_summary_voltages = list(map(Decimal, ["0.01", "5"]))
     value_extractor = lambda m: m.anode_current_corrected or m.anode_current
-    fig, axes = plot_data(measurements, plot_summary_voltages, outliers_coefficient, value_extractor)
+    fig, axes = plot_data(measurements, plot_summary_voltages, outliers_coefficient,
+                          value_extractor)
     for [ax, _] in axes:
         ax.set_xlabel("Anode current [pA]")
 
@@ -90,12 +93,13 @@ def summary(ctx: click.Context, chips_type: Union[str, None], wafer_name: str, f
 
 
 @click.command(name='summary-cv',
-               help="Make summary files (png and xlsx) for CV measurements' data.")
+               help="Make summary-cv files (png and xlsx) for CV measurements' data.")
 @click.pass_context
 @click.option("-t", "--chips-type", help="Type of the chips to analyze.")
 @click.option("-w", "--wafer", "wafer_name", prompt=f"Wafer name", help="Wafer name.")
-@click.option("-o", "--output", "file_name", default=lambda: f"summary-{strftime('%y%m%d-%H%M%S')}",
-              help="Output file names without extension.", show_default="summary-{datetime}")
+@click.option("-o", "--output", "file_name",
+              default=lambda: f"summary-cv-{strftime('%y%m%d-%H%M%S')}",
+              help="Output file names without extension.", show_default="summary-cv-{datetime}")
 @click.option("-s", "--chip-state", "chip_states", help="State of the chips to analyze.",
               default=['all'], show_default=True, multiple=True)
 @click.option("--outliers-coefficient", default=2.0, show_default=True,
@@ -138,7 +142,8 @@ def summary_cv(ctx: click.Context, chips_type: Union[str, None], wafer_name: str
     sheets_data = get_sheets_cv_data(measurements)
     plot_summary_voltages = list(map(Decimal, ["-5", "0"]))
     value_extractor = lambda m: m.capacitance
-    fig, axes = plot_data(measurements, plot_summary_voltages, outliers_coefficient, value_extractor)
+    fig, axes = plot_data(measurements, plot_summary_voltages, outliers_coefficient,
+                          value_extractor)
     for [ax, _] in axes:
         ax.set_xlabel("Capacitance [pF]")
 
@@ -175,7 +180,8 @@ def save_summary_to_excel(sheets_data: dict, info: pd.Series, file_name: str):
             'lessThan': PatternFill(bgColor='ee9090', fill_type='solid'),
             'greaterThanOrEqual': PatternFill(bgColor='90ee90', fill_type='solid')
         }
-        apply_conditional_formatting(writer.book["Summary"], sheets_data['chip_types'], rules, thresholds)
+        apply_conditional_formatting(writer.book["Summary"], sheets_data['chip_types'], rules,
+                                     thresholds)
 
         sheets_data['anode'].rename(columns=float).to_excel(writer, sheet_name='I1 anode')
         sheets_data['cathode'].rename(columns=float).to_excel(writer, sheet_name='I3 cathode')
@@ -318,6 +324,7 @@ def plot_hist(ax: Axes, data: np.ndarray):
     ax.set_ylabel("Number of chips")
     ax.hist(data * 1e12, bins=15)
 
+
 T = TypeVar('T')
 
 
@@ -344,7 +351,8 @@ def plot_heat_map(ax: Axes, measurements: list[Generic[T]], low, high,
 
 
 def plot_data(values: list[Generic[T]], voltages: list[Decimal],
-              outliers_coefficient: float, value_extractor: Callable[[T], float]) -> (Figure, ndarray[Any, Axes]):
+              outliers_coefficient: float, value_extractor: Callable[[T], float]) -> (
+Figure, ndarray[Any, Axes]):
     fig, axes = plt.subplots(nrows=len(voltages), ncols=2,
                              figsize=(10, 5 * len(voltages)),
                              gridspec_kw=dict(left=0.08, right=0.95, bottom=0.05, top=0.95,
