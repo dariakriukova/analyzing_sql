@@ -11,6 +11,7 @@ from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from matplotlib.ticker import MaxNLocator
+from numpy import ndarray
 from openpyxl.formatting.rule import CellIsRule
 from openpyxl.styles import PatternFill, Fill
 from openpyxl.worksheet.worksheet import Worksheet
@@ -71,7 +72,9 @@ def summary(ctx: click.Context, chips_type: Union[str, None], wafer_name: str, f
     sheets_data = get_sheets_data(measurements)
     plot_summary_voltages = list(map(Decimal, ["0.01", "5"]))
     value_extractor = lambda m: m.anode_current_corrected or m.anode_current
-    fig = plot_data(measurements, plot_summary_voltages, outliers_coefficient, value_extractor)
+    fig, axes = plot_data(measurements, plot_summary_voltages, outliers_coefficient, value_extractor)
+    for [ax, _] in axes:
+        ax.set_xlabel("Anode current [pA]")
 
     png_file_name = file_name + '.png'
     check_file_exists(png_file_name)
@@ -135,7 +138,9 @@ def summary_cv(ctx: click.Context, chips_type: Union[str, None], wafer_name: str
     sheets_data = get_sheets_cv_data(measurements)
     plot_summary_voltages = list(map(Decimal, ["-5", "0"]))
     value_extractor = lambda m: m.capacitance
-    fig = plot_data(measurements, plot_summary_voltages, outliers_coefficient, value_extractor)
+    fig, axes = plot_data(measurements, plot_summary_voltages, outliers_coefficient, value_extractor)
+    for [ax, _] in axes:
+        ax.set_xlabel("Capacitance [pF]")
 
     png_file_name = file_name + '.png'
     check_file_exists(png_file_name)
@@ -311,15 +316,7 @@ def get_outliers_idx(data: np.ndarray, m: float) -> np.ndarray:
 
 def plot_hist(ax: Axes, data: np.ndarray):
     ax.set_ylabel("Number of chips")
-    ax.set_xlabel("Anode current [pA]")
     ax.hist(data * 1e12, bins=15)
-
-
-def plot_hist_cv(ax: Axes, data: np.ndarray):
-    ax.set_ylabel("Number of chips")
-    ax.set_xlabel("Capacitance [pF]")
-    ax.hist(data * 1e12, bins=15)
-
 
 T = TypeVar('T')
 
@@ -347,7 +344,7 @@ def plot_heat_map(ax: Axes, measurements: list[Generic[T]], low, high,
 
 
 def plot_data(values: list[Generic[T]], voltages: list[Decimal],
-              outliers_coefficient: float, value_extractor: Callable[[T], float]) -> Figure:
+              outliers_coefficient: float, value_extractor: Callable[[T], float]) -> (Figure, ndarray[Any, Axes]):
     fig, axes = plt.subplots(nrows=len(voltages), ncols=2,
                              figsize=(10, 5 * len(voltages)),
                              gridspec_kw=dict(left=0.08, right=0.95, bottom=0.05, top=0.95,
@@ -370,4 +367,4 @@ def plot_data(values: list[Generic[T]], voltages: list[Decimal],
         low, high = data.min(), data.max()
         axes[i][1].set_title(f"{voltage}V")
         plot_heat_map(axes[i][1], target_values, low, high, value_extractor)
-    return fig
+    return fig, axes
