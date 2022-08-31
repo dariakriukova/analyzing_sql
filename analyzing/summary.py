@@ -12,7 +12,8 @@ from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from matplotlib.ticker import MaxNLocator
 from openpyxl.formatting.rule import CellIsRule
-from openpyxl.styles import PatternFill
+from openpyxl.styles import PatternFill, Fill
+from openpyxl.worksheet.worksheet import Worksheet
 from sqlalchemy.orm import Session, joinedload
 
 from orm import IVMeasurement, CVMeasurement, Wafer, Chip
@@ -149,126 +150,85 @@ def summary_cv(ctx: click.Context, chips_type: Union[str, None], wafer_name: str
     logger.info(f'Summary data is saved to {exel_file_name}')
 
 
-def save_summary_to_excel(sheets_data: dict[str, pd.DataFrame], info: pd.Series, file_name: str):
+def save_summary_to_excel(sheets_data: dict, info: pd.Series, file_name: str):
     with pd.ExcelWriter(file_name) as writer:
         summary_voltages = list(map(Decimal, ["-1", "0.01", "5", "10", "20"]))
         summary_df = sheets_data['anode'][summary_voltages].rename(columns=float)
         summary_df.to_excel(writer, sheet_name='Summary')
-        summary_sheet = writer.book["Summary"]
-        red_fill = PatternFill(bgColor='ee9090', fill_type='solid')
-        green_fill = PatternFill(bgColor='90ee90', fill_type='solid')
 
-        chips_row_numbers = [(i + 2, name) for i, name in enumerate(sheets_data['chip_names'])]
-
-        for chip_type in sheets_data['chip_types']:
-
-            def is_current_type(chip_name: str) -> bool:
-                return chip_name.startswith(chip_type)
-
-            if chip_type == "X":
-                thresholds = {'-1': 1e-3, '0.01': -12e-12, '10': -80e-12, '20': -500e-12}
-            elif chip_type == 'Y':
-                thresholds = {'-1': 1e-3, '0.01': -15e-12, '10': -120e-12, '20': -1000e-12}
-            elif chip_type == 'U':
-                thresholds = {'-1': 1e-3, '0.01': -30e-12, '10': -200e-12, '20': -1200e-12}
-            elif chip_type == 'V':
-                thresholds = {'-1': 1e-3, '0.01': -60e-12, '10': -800e-12, '20': -1400e-12}
-            elif chip_type == 'F':
-                thresholds = {'-1': 5e-3, '0.01': -40e-12, '10': -2e-9, }
-            elif chip_type == 'G':
-                thresholds = {'-1': 5e-3, '0.01': -50e-12, '10': -2e-9, }
-            elif chip_type == 'E':
-                thresholds = {'-1': 5e-3, '0.01': -20e-12, '10': -2e-9, }
-            elif chip_type == 'C':
-                thresholds = {'-1': 1e-3, '0.01': -20e-12, '10': -1e-9, }
-            else:
-                continue
-
-            for voltage, current_threshold in thresholds.items():
-                try:
-                    column_index = summary_voltages.index(Decimal(voltage))
-
-                    first_row_index = next(i for i, v in chips_row_numbers if is_current_type(v))
-                    last_row_index = next(
-                        i for i, v in reversed(chips_row_numbers) if is_current_type(v))
-                except ValueError:
-                    continue
-
-                column_letter = chr(ord('B') + column_index)
-                cell_range = f'{column_letter}{first_row_index}:{column_letter}{last_row_index}'
-                summary_sheet.conditional_formatting \
-                    .add(cell_range, CellIsRule(operator='lessThan', formula=[current_threshold],
-                                                fill=red_fill))
-                summary_sheet.conditional_formatting \
-                    .add(cell_range,
-                         CellIsRule(operator='greaterThanOrEqual', formula=[current_threshold],
-                                    fill=green_fill))
-
-        # summary_sheet.
+        thresholds = {
+            "X": {'-1': 1e-3, '0.01': -12e-12, '10': -80e-12, '20': -500e-12},
+            'Y': {'-1': 1e-3, '0.01': -15e-12, '10': -120e-12, '20': -1000e-12},
+            'U': {'-1': 1e-3, '0.01': -30e-12, '10': -200e-12, '20': -1200e-12},
+            'V': {'-1': 1e-3, '0.01': -60e-12, '10': -800e-12, '20': -1400e-12},
+            'F': {'-1': 5e-3, '0.01': -40e-12, '10': -2e-9, },
+            'G': {'-1': 5e-3, '0.01': -50e-12, '10': -2e-9, },
+            'E': {'-1': 5e-3, '0.01': -20e-12, '10': -2e-9, },
+            'C': {'-1': 1e-3, '0.01': -20e-12, '10': -1e-9, },
+        }
+        rules = {
+            'lessThan': PatternFill(bgColor='ee9090', fill_type='solid'),
+            'greaterThanOrEqual': PatternFill(bgColor='90ee90', fill_type='solid')
+        }
+        apply_conditional_formatting(writer.book["Summary"], sheets_data['chip_types'], rules, thresholds)
 
         sheets_data['anode'].rename(columns=float).to_excel(writer, sheet_name='I1 anode')
         sheets_data['cathode'].rename(columns=float).to_excel(writer, sheet_name='I3 cathode')
         info.to_excel(writer, sheet_name='Info')
 
 
-def save_cv_summary_to_excel(sheets_data: dict[str, pd.DataFrame], info: pd.Series, file_name: str):
+def save_cv_summary_to_excel(sheets_data: dict, info: pd.Series, file_name: str):
     with pd.ExcelWriter(file_name) as writer:
         summary_voltages = list(map(Decimal, ["-5", "0", "-35"]))
         summary_df = sheets_data['capacitance'][summary_voltages].rename(columns=float)
         summary_df.to_excel(writer, sheet_name='Summary')
-        summary_sheet = writer.book["Summary"]
-        red_fill = PatternFill(bgColor='ee9090', fill_type='solid')
-        green_fill = PatternFill(bgColor='90ee90', fill_type='solid')
 
-        chips_row_numbers = [(i + 2, name) for i, name in enumerate(sheets_data['chip_names'])]
-
-        for chip_type in sheets_data['chip_types']:
-
-            def is_current_type(chip_name: str) -> bool:
-                return chip_name.startswith(chip_type)
-
-            if chip_type == "X":
-                thresholds = {'0': 20e-12, '-5': 7.3e-12}
-            elif chip_type == 'Y':
-                thresholds = {'0': 65e-12, '-5': 18e-12}
-            elif chip_type == 'U':
-                thresholds = {'0': 370e-12, '-5': 95e-12}
-            elif chip_type == 'V':
-                thresholds = {'0': 1200e-12, '-5': 320e-12}
-            else:
-                continue
-
-            for voltage, capacitance_threshold in thresholds.items():
-                try:
-                    column_index = summary_voltages.index(Decimal(voltage))
-
-                    first_row_index = next(i for i, v in chips_row_numbers if is_current_type(v))
-                    last_row_index = next(
-                        i for i, v in reversed(chips_row_numbers) if is_current_type(v))
-                except ValueError:
-                    continue
-
-                column_letter = chr(ord('B') + column_index)
-                cell_range = f'{column_letter}{first_row_index}:{column_letter}{last_row_index}'
-                summary_sheet.conditional_formatting \
-                    .add(cell_range,
-                         CellIsRule(operator='greaterThanOrEqual', formula=[capacitance_threshold],
-                                    fill=red_fill))
-                summary_sheet.conditional_formatting \
-                    .add(cell_range,
-                         CellIsRule(operator='lessThan', formula=[capacitance_threshold],
-                                    fill=green_fill))
-
-        # summary_sheet.
+        thresholds = {
+            'X': {'0': 20e-12, '-5': 7.3e-12},
+            'Y': {'0': 65e-12, '-5': 18e-12},
+            'U': {'0': 370e-12, '-5': 95e-12},
+            'V': {'0': 1200e-12, '-5': 320e-12}
+        }
+        rules = {
+            'greaterThanOrEqual': PatternFill(bgColor='ee9090', fill_type='solid'),
+            'lessThan': PatternFill(bgColor='90ee90', fill_type='solid')
+        }
+        apply_conditional_formatting(writer.book["Summary"], sheets_data['chip_types'], rules,
+                                     thresholds)
 
         sheets_data['capacitance'].rename(columns=float).to_excel(writer, sheet_name='All data')
         info.to_excel(writer, sheet_name='Info')
 
 
+def apply_conditional_formatting(sheet: Worksheet, chip_types: list[str], rules: dict[str, Fill],
+                                 thresholds: dict[str, dict[str, float]]):
+    chip_row_index = [(i + 1, cell.value) for i, cell in enumerate(sheet['A']) if cell.value]
+
+    for chip_type in chip_types:
+        def is_current_type(chip_name: str) -> bool:
+            return chip_name.startswith(chip_type)
+
+        for voltage, threshold in thresholds[chip_type].items():
+            voltage = Decimal(voltage)
+            try:
+                column_cell = next((cell for cell in sheet['1'] if
+                                    cell.value is not None and Decimal(str(cell.value)) == voltage))
+                first_row_index = next(i for i, v in chip_row_index if is_current_type(v))
+                last_row_index = next(i for i, v in reversed(chip_row_index) if is_current_type(v))
+            except ValueError:
+                continue
+
+            column_letter = column_cell.column_letter
+            cell_range = f'{column_letter}{first_row_index}:{column_letter}{last_row_index}'
+            for rule_name, rule in rules.items():
+                cells_rule = CellIsRule(operator=rule_name, formula=[threshold], fill=rule)
+                sheet.conditional_formatting.add(cell_range, cells_rule)
+
+
 def get_sheets_data(measurements: list[IVMeasurement]) -> dict[str, Union[pd.DataFrame, Any]]:
     chip_names = sorted({measurement.chip.name for measurement in measurements})
-    chip_types = sorted({measurement.chip.type for measurement in measurements})
-    voltages = {measurement.voltage_input for measurement in measurements}
+    chip_types = {measurement.chip.type for measurement in measurements}
+    voltages = sorted({measurement.voltage_input for measurement in measurements})
     anode_df = pd.DataFrame(dtype='float64', index=chip_names, columns=voltages)
     cathode_df = pd.DataFrame(dtype='float64', index=chip_names, columns=voltages)
     has_uncorrected_current = False
@@ -312,28 +272,7 @@ def get_sheets_cv_data(measurements: list[CVMeasurement]) -> dict[str, Union[pd.
 
 
 def get_info(ctx: click.Context, wafer: Wafer, chip_states: list[str],
-             measurements: list[IVMeasurement]) -> pd.Series:
-    format_date = strftime("%A, %d %b %Y", localtime())
-    if 'all' in chip_states:
-        chip_states_str = 'all'
-    else:
-        chip_states_str = "; ".join(
-            [state.name for state in ctx.obj['chip_states'] if str(state.id) in chip_states])
-
-    first_measurement = min(measurements, key=lambda m: m.datetime)
-    last_measurement = max(measurements, key=lambda m: m.datetime)
-
-    return pd.Series({
-        'Wafer': wafer.name,
-        'Summary generation date': format_date,
-        'Chip state': chip_states_str,
-        "First measurement date": first_measurement.datetime,
-        "Last measurement date": last_measurement.datetime,
-    })
-
-
-def get_cv_info(ctx: click.Context, wafer: Wafer, chip_states: list[str],
-                measurements: list[CVMeasurement]) -> pd.Series:
+             measurements: list[Union[IVMeasurement, CVMeasurement]]) -> pd.Series:
     format_date = strftime("%A, %d %b %Y", localtime())
     if 'all' in chip_states:
         chip_states_str = 'all'
