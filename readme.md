@@ -48,13 +48,15 @@ Options:
   --help  Show this message and exit.
 
 Commands:
-  set-db   Set database credentials.
-  summary  Summarize data in excel file.
+  parse-cv    Parse .dat files with CV measurements and save to database
+  parse-iv    Parse .dat files with IV measurements and save to database
+  set-db      Set database credentials.
+  show        Show data from database
+  summary-cv  Make summary-cv files (png and xlsx) for CV measurements'...
+  summary-iv  Make summary-iv files (png and xlsx) for IV measurements'...
 ```
 
 ### TODO
 
-- [ ] Tail option to show N last measurements
+- [ ] New type of summary: compare wafers by leakage density
 - [ ] Add database migrations
-- [ ] Implement chip measurement command
-- [ ] Conditional formatting in excel file
