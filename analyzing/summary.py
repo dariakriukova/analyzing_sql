@@ -84,7 +84,9 @@ def summary(ctx: click.Context, chips_type: Union[str, None], wafer_name: str, f
 
     logger.info(f'Summary data is saved to {exel_file_name}')
 
-@click.command(name='summary-cv', help="Make summary files (png and xlsx) for CV measurements' data.")
+
+@click.command(name='summary-cv',
+               help="Make summary files (png and xlsx) for CV measurements' data.")
 @click.pass_context
 @click.option("-t", "--chips-type", help="Type of the chips to analyze.")
 @click.option("-w", "--wafer", "wafer_name", prompt=f"Wafer name", help="Wafer name.")
@@ -99,8 +101,8 @@ def summary(ctx: click.Context, chips_type: Union[str, None], wafer_name: str, f
 @click.option("--after", type=click.DateTime(formats=date_formats),
               help=f"Include measurements after (inclusive) provided date and time. {date_formats_help}")
 def summary_cv(ctx: click.Context, chips_type: Union[str, None], wafer_name: str, file_name: str,
-            chip_states: list[str], outliers_coefficient: float, before: Union[datetime, None],
-            after: Union[datetime, None]):
+               chip_states: list[str], outliers_coefficient: float, before: Union[datetime, None],
+               after: Union[datetime, None]):
     session: Session = ctx.obj['session']
     if ctx.obj['default_wafer'].name != wafer_name:
         wafer = session.query(Wafer).filter(Wafer.name == wafer_name).first()
@@ -208,6 +210,7 @@ def save_summary_to_excel(sheets_data: dict[str, pd.DataFrame], info: pd.Series,
         sheets_data['cathode'].rename(columns=float).to_excel(writer, sheet_name='I3 cathode')
         info.to_excel(writer, sheet_name='Info')
 
+
 def save_cv_summary_to_excel(sheets_data: dict[str, pd.DataFrame], info: pd.Series, file_name: str):
     with pd.ExcelWriter(file_name) as writer:
         summary_voltages = list(map(Decimal, ["-5", "0", "-35"]))
@@ -248,11 +251,13 @@ def save_cv_summary_to_excel(sheets_data: dict[str, pd.DataFrame], info: pd.Seri
                 column_letter = chr(ord('B') + column_index)
                 cell_range = f'{column_letter}{first_row_index}:{column_letter}{last_row_index}'
                 summary_sheet.conditional_formatting \
-                    .add(cell_range, CellIsRule(operator='greaterThanOrEqual', formula=[capacitance_threshold],
-                                                fill=red_fill))
+                    .add(cell_range,
+                         CellIsRule(operator='greaterThanOrEqual', formula=[capacitance_threshold],
+                                    fill=red_fill))
                 summary_sheet.conditional_formatting \
-                    .add(cell_range, CellIsRule(operator='lessThan', formula=[capacitance_threshold],
-                                                fill=green_fill))
+                    .add(cell_range,
+                         CellIsRule(operator='lessThan', formula=[capacitance_threshold],
+                                    fill=green_fill))
 
         # summary_sheet.
 
@@ -328,7 +333,7 @@ def get_info(ctx: click.Context, wafer: Wafer, chip_states: list[str],
 
 
 def get_cv_info(ctx: click.Context, wafer: Wafer, chip_states: list[str],
-             measurements: list[CVMeasurement]) -> pd.Series:
+                measurements: list[CVMeasurement]) -> pd.Series:
     format_date = strftime("%A, %d %b %Y", localtime())
     if 'all' in chip_states:
         chip_states_str = 'all'
@@ -379,7 +384,9 @@ def plot_hist_cv(ax: Axes, data: np.ndarray):
 
 T = TypeVar('T')
 
-def plot_heat_map(ax: Axes, measurements: list[Generic[T]], low, high, value_extractor: Callable[[T], float]):
+
+def plot_heat_map(ax: Axes, measurements: list[Generic[T]], low, high,
+                  value_extractor: Callable[[T], float]):
     xs = {measurement.chip.x_coordinate for measurement in measurements}
     ys = {measurement.chip.y_coordinate for measurement in measurements}
 
@@ -387,7 +394,8 @@ def plot_heat_map(ax: Axes, measurements: list[Generic[T]], low, high, value_ext
     height = max(ys) - min(ys) + 1
     grid = np.full((height, width), np.nan)
     for cell in measurements:
-        grid[cell.chip.y_coordinate - min(ys)][cell.chip.x_coordinate - min(xs)] = value_extractor(cell)
+        grid[cell.chip.y_coordinate - min(ys)][cell.chip.x_coordinate - min(xs)] = value_extractor(
+            cell)
 
     X = np.linspace(min(xs) - 0.5, max(xs) + 0.5, width + 1)
     Y = np.linspace(min(ys) - 0.5, max(ys) + 0.5, height + 1)
@@ -411,7 +419,8 @@ def plot_data(values: list[Generic[T]], voltages: list[Decimal],
 
         outliers_idx = get_outliers_idx(data, outliers_coefficient)
         if outliers_idx.any():
-            outlier_chip_names = (outlier.chip.name for outlier in np.array(target_values)[outliers_idx])
+            outlier_chip_names = (outlier.chip.name for outlier in
+                                  np.array(target_values)[outliers_idx])
             logger.warn(
                 f'Outliers detected! {", ".join(outlier_chip_names)} are ignored on {voltage}V histogram and heat map color scale')
             data = data[~outliers_idx]
