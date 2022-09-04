@@ -139,7 +139,7 @@ def parse_file(file_path: str) -> dict[str, Union[datetime, pd.DataFrame]]:
 
 
 def create_iv_measurements(data: pd.DataFrame, timestamp: datetime, chip: Chip,
-                        chip_state: ChipState) -> Generator[IVMeasurement, None, None]:
+                           chip_state: ChipState) -> Generator[IVMeasurement, None, None]:
     for idx, row in data.iterrows():
         yield IVMeasurement(
             chip=chip,
@@ -150,8 +150,9 @@ def create_iv_measurements(data: pd.DataFrame, timestamp: datetime, chip: Chip,
             cathode_current=row['ICA'],
             datetime=timestamp)
 
+
 def create_cv_measurements(data: pd.DataFrame, timestamp: datetime, chip: Chip,
-                        chip_state: ChipState) -> Generator[CVMeasurement, None, None]:
+                           chip_state: ChipState) -> Generator[CVMeasurement, None, None]:
     for idx, row in data.iterrows():
         yield CVMeasurement(
             chip=chip,

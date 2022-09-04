@@ -30,6 +30,17 @@
             "console": "integratedTerminal",
             "justMyCode": false,
             "args": ["parse-cv", ".\\data\\*.dat"]
+        },
+        {
+            "name": "Summirize cv",
+            "type": "python",
+            "request": "launch",
+            "program": "analyzing.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": ["summary-cv"]
         }
+
+        
     ]
 }

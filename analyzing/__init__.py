@@ -14,10 +14,10 @@ from utils import logger, get_db_url
 from .parse import parse_iv, parse_cv
 from .set_db import set_db
 from .show import show
-from .summary import summary
+from .summary import summary_iv, summary_cv
 
 
-@click.group(commands=[summary, set_db, show, parse_cv, parse_iv])
+@click.group(commands=[summary_iv, summary_cv, set_db, show, parse_cv, parse_iv])
 @click.pass_context
 @click.option("--log-level", default="INFO", help="Log level.", show_default=True,
               type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
@@ -26,7 +26,8 @@ from .summary import summary
 def analyzing(ctx: click.Context, log_level: str, db_url: Union[str, None]):
     logger.setLevel(log_level)
     ctx.obj = dict()
-    if ctx.invoked_subcommand in (summary.name, show.name, parse_iv.name, parse_cv.name):
+    active_command = analyzing.commands[ctx.invoked_subcommand]
+    if active_command in (summary_iv, summary_cv, show, parse_iv, parse_cv):
         try:
             if db_url is None:
                 db_url = get_db_url(username=keyring.get_password("ELFYS_DB", "USER"),
@@ -46,19 +47,19 @@ def analyzing(ctx: click.Context, log_level: str, db_url: Union[str, None]):
                 sentry_sdk.capture_exception(e)
             sys.exit()
 
-        if ctx.invoked_subcommand in (summary.name, parse_iv.name, parse_cv.name):
+        if active_command in (summary_iv, summary_cv, parse_iv, parse_cv):
             chip_states = session.query(ChipState).all()
             ctx.obj['chip_states'] = chip_states
 
-            if ctx.invoked_subcommand == summary.name:
-                chip_state_option = next((o for o in summary.params if o.name == 'chip_states'))
-                chip_state_option.type = click.Choice(
-                    [str(state.id) for state in chip_states] + chip_state_option.default)
-                chip_state_option.help = chip_state_option.help + "\n\n" + "\n".join(
-                    ["{} - {};".format(state.id, state.name) for state in chip_states])
+        if active_command in (summary_cv, summary_iv):
+            chip_state_option = next((o for o in active_command.params if o.name == 'chip_states'))
+            chip_state_option.type = click.Choice(
+                [str(state.id) for state in chip_states] + chip_state_option.default)
+            chip_state_option.help = chip_state_option.help + "\n\n" + "\n".join(
+                ["{} - {};".format(state.id, state.name) for state in chip_states])
 
-                last_wafer = session.query(Wafer).order_by(desc(Wafer.created_at)).first()
-                default_wafer_name = last_wafer.name
-                wafer_option = next((o for o in summary.params if o.name == 'wafer_name'))
-                wafer_option.default = default_wafer_name
-                ctx.obj['default_wafer'] = last_wafer
+            last_wafer = session.query(Wafer).order_by(desc(Wafer.created_at)).first()
+            default_wafer_name = last_wafer.name
+            wafer_option = next((o for o in active_command.params if o.name == 'wafer_name'))
+            wafer_option.default = default_wafer_name
+            ctx.obj['default_wafer'] = last_wafer
