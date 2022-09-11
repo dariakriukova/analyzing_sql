@@ -8,6 +8,15 @@ from .base import Base
 class Chip(Base):
     __tablename__ = 'chip'
 
+    chip_sizes = {
+        'X': (1, 1),
+        'Y': (2, 2),
+        'U': (5, 5),
+        'V': (10, 10),
+        'F': (2.56, 1.25),
+        'G': (1.4, 3.25),
+    }
+
     id = Column(Integer, primary_key=True, nullable=False)
     wafer_id = Column(Integer, ForeignKey('wafer.id'))
     wafer = relationship("Wafer", back_populates='chips')
@@ -24,8 +33,20 @@ class Chip(Base):
     def y_coordinate(self):
         return int(self.name[3:5])
 
+    @property
+    def area(self):
+        return Chip.get_area(self.type)
+
     def to_series(self) -> pd.Series:
         return pd.Series({
             'Name': self.name,
             'Wafer': self.wafer.name,
         })
+
+    @staticmethod
+    def get_area(chip_type: str) -> float:
+        return Chip.chip_sizes[chip_type][0] * Chip.chip_sizes[chip_type][1]
+
+    @staticmethod
+    def get_perimeter(chip_type: str) -> float:
+        return (Chip.chip_sizes[chip_type][0] + Chip.chip_sizes[chip_type][1]) * 2

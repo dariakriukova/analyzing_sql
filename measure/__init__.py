@@ -49,7 +49,7 @@ def measure(ctx: click.Context, log_level: str, db_url: Union[str, None], simula
             sentry_sdk.capture_exception(e)
         sys.exit()
 
-    chip_state_option = next((o for o in iv.params if o.name == 'chip_state'))
+    chip_state_option = next((o for o in iv.params if o.name == 'chip_state_id'))
     chip_state_option.type = click.Choice([str(state.id) for state in chip_states])
     chip_state_option.help = chip_state_option.help + "\n\n" + "\n".join(
         ["{} - {};".format(state.id, state.name) for state in chip_states])

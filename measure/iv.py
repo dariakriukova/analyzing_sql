@@ -47,10 +47,10 @@ def validate_wafer_name(ctx, param, wafer_name: str):
               multiple=True, default=[])
 @click.option("-w", "--wafer", "wafer_name", prompt=f"Input wafer name",
               callback=validate_wafer_name, help="Wafer name.")
-@click.option("-s", "--chip-state", "chip_state", prompt="Input chip state",
+@click.option("-s", "--chip-state", "chip_state_id", prompt="Input chip state",
               help="State of the chips.")
 def iv(ctx: click.Context, config_path: str, chip_names: list[str], wafer_name: str,
-       chip_state: str):
+       chip_state_id: str):
     with click.open_file(config_path) as config_file:
         configs = yaml.safe_load(config_file)
 
@@ -104,7 +104,7 @@ def iv(ctx: click.Context, config_path: str, chip_names: list[str], wafer_name: 
         for chip_name, chip_config in zip(chip_names, configs['chips'], strict=True):
             chip_id = next(chip.id for chip in wafer.chips if chip.name == chip_name)
             measurements_kwargs = dict(
-                chip_state_id=int(chip_state),
+                chip_state_id=int(chip_state_id),
                 chip_id=chip_id,
                 **measurement_config['program']['chip_kwargs'],
             )
