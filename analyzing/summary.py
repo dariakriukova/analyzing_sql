@@ -87,7 +87,7 @@ def summary_iv(ctx: click.Context, chips_type: Union[str, None], wafer_name: str
     exel_file_name = file_name + '.xlsx'
     check_file_exists(exel_file_name)
     info = get_info(ctx, wafer=wafer, chip_state_ids=chip_state_ids, measurements=measurements)
-    save_summary_to_excel(sheets_data, info, exel_file_name)
+    save_iv_summary_to_excel(sheets_data, info, exel_file_name)
 
     logger.info(f'Summary data is saved to {exel_file_name}')
 
@@ -160,9 +160,9 @@ def summary_cv(ctx: click.Context, chips_type: Union[str, None], wafer_name: str
     logger.info(f'Summary data is saved to {exel_file_name}')
 
 
-def save_summary_to_excel(sheets_data: dict, info: pd.Series, file_name: str):
+def save_iv_summary_to_excel(sheets_data: dict, info: pd.Series, file_name: str):
     with pd.ExcelWriter(file_name) as writer:
-        summary_voltages = list(map(Decimal, ["-1", "0.01", "5", "10", "20"]))
+        summary_voltages = list(map(Decimal, ["-1", "0.01", "5", "6", "10", "20"]))
         summary_df = sheets_data['anode'][summary_voltages].rename(columns=float)
         summary_df.to_excel(writer, sheet_name='Summary')
 
