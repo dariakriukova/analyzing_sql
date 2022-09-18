@@ -8,7 +8,7 @@ import pandas as pd
 from sqlalchemy.orm import Session, contains_eager
 
 from orm import Wafer, Chip, IVMeasurement
-from utils import logger, flatten_options
+from utils import logger, flatten_options, iv_thresholds
 
 
 @click.command(name="compare-wafers", help='Compare wafers')
@@ -24,7 +24,8 @@ def compare_wafers(ctx: click.Context, wafer_names: set[str], chip_state_ids: tu
                    file_name: str):
     session: Session = ctx.obj['session']
 
-    voltages = tuple(map(Decimal, ("0.01", "10", "20")))
+    compare_voltages = set(map(Decimal, ("0.01", "10", "20")))
+    threshold_voltages = set(map(Decimal, {v for x in iv_thresholds.values() for v in x}))
 
     wafers_query = session.query(Wafer).filter(Wafer.name.in_(wafer_names))
     wafers = wafers_query.all()
@@ -37,7 +38,7 @@ def compare_wafers(ctx: click.Context, wafer_names: set[str], chip_state_ids: tu
     chips_query = session.query(Chip).join(Chip.iv_measurements) \
         .options(contains_eager(Chip.iv_measurements)) \
         .filter(Chip.wafer_id.in_({wafer.id for wafer in wafers})) \
-        .filter(IVMeasurement.voltage_input.in_(voltages))
+        .filter(IVMeasurement.voltage_input.in_(compare_voltages | threshold_voltages))
 
     if 'all' not in chip_state_ids:
         chips_query = chips_query.filter(IVMeasurement.chip_state_id.in_(chip_state_ids))
@@ -57,8 +58,8 @@ def compare_wafers(ctx: click.Context, wafer_names: set[str], chip_state_ids: tu
 
     index = pd.MultiIndex(levels=[wafer_names, chip_state_names], codes=[[], []],
                           names=['wafer', 'chip'])
-    codes = list(zip(*product(range(len(voltages)), range(len(chip_types)))))
-    columns = pd.MultiIndex(levels=[voltages, chip_types, chip_perimeter_areas],
+    codes = list(zip(*product(range(len(compare_voltages)), range(len(chip_types)))))
+    columns = pd.MultiIndex(levels=[sorted(compare_voltages), chip_types, chip_perimeter_areas],
                             codes=[*codes, codes[1]],
                             names=['voltage, V', 'type', 'perimeter/area, mm^-1'])
 
@@ -66,16 +67,17 @@ def compare_wafers(ctx: click.Context, wafer_names: set[str], chip_state_ids: tu
     leak_density_df = pd.DataFrame(index=index, columns=columns)
     std_df = pd.DataFrame(index=index, columns=columns)
 
+    yield_codes = list(zip(*product(range(len(threshold_voltages)), range(len(chip_types)))))
+    yield_columns = pd.MultiIndex(levels=[sorted(threshold_voltages), chip_types],
+                                  codes=yield_codes,
+                                  names=['voltage, V', 'type'])
+    yield_df = pd.DataFrame(index=index, columns=yield_columns)
+
     for wafer, chip_type in product(wafers, chip_types):
         target_chips = [chip for chip in chips if chip.wafer == wafer and chip.type == chip_type]
 
-        for (voltage, chip_state) in product(voltages, chip_states):
-            target_values = [
-                iv_measurement.anode_current_corrected or iv_measurement.anode_current
-                for chip in target_chips
-                for iv_measurement in chip.iv_measurements
-                if iv_measurement.voltage_input == voltage
-                and iv_measurement.chip_state_id == chip_state.id]
+        for (voltage, chip_state) in product(compare_voltages, chip_states):
+            target_values = get_target_values(chip_state, target_chips, voltage)
             if not target_values:
                 continue
 
@@ -90,11 +92,35 @@ def compare_wafers(ctx: click.Context, wafer_names: set[str], chip_state_ids: tu
             std = np.std(target_values)
             std_df.loc[location] = std
 
-    leak_density_df.dropna(how="all", inplace=True)
-    leakage_df.dropna(how="all", inplace=True)
-    std_df.dropna(how="all", inplace=True)
+        for (voltage, chip_state) in product(threshold_voltages, chip_states):
+            leakage_threshold = iv_thresholds[chip_type].get(str(voltage))
+            if leakage_threshold is None:
+                continue
+
+            target_values = get_target_values(chip_state, target_chips, voltage)
+            if not target_values:
+                continue
+            location = (wafer.name, chip_state.name), (voltage, chip_type)
+            yield_value = np.mean([value > leakage_threshold for value in target_values])
+            yield_df.loc[location] = "{:.2%}".format(yield_value)
 
     with pd.ExcelWriter(file_name) as writer:
-        leakage_df.to_excel(writer, sheet_name='Leakage')
-        leak_density_df.to_excel(writer, sheet_name='Density')
-        std_df.to_excel(writer, sheet_name='Standard Deviation')
+        leakage_df.dropna(how="all", axis=0) \
+            .dropna(how="all", axis=1).to_excel(writer, sheet_name='Leakage')
+        leak_density_df.dropna(how="all", axis=0) \
+            .dropna(how="all", axis=1).to_excel(writer, sheet_name='Density')
+        std_df.dropna(how="all", axis=0) \
+            .dropna(how="all", axis=1).to_excel(writer, sheet_name='Standard Deviation')
+        yield_df.dropna(how="all", axis=0) \
+            .dropna(how="all", axis=1).to_excel(writer, sheet_name='Yield')
+    logger.info(f'Wafers comparison is saved to {file_name}')
+
+
+def get_target_values(chip_state, target_chips, voltage):
+    return [
+        iv_measurement.anode_current_corrected or iv_measurement.anode_current
+        for chip in target_chips
+        for iv_measurement in chip.iv_measurements
+        if iv_measurement.voltage_input == voltage
+        and iv_measurement.chip_state_id == chip_state.id
+    ]
