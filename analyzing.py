@@ -18,4 +18,4 @@ if frozen:
 from analyzing import analyzing
 
 if __name__ == '__main__':
-        analyzing(windows_expand_args=False)
+    analyzing(windows_expand_args=False)

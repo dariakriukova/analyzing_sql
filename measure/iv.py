@@ -50,7 +50,7 @@ def validate_wafer_name(ctx, param, wafer_name: str):
               callback=validate_wafer_name, help="Wafer name.")
 @click.option("-s", "--chip-state", "chip_state_id", prompt="Input chip state",
               help="State of the chips.")
-@click.option("--auto", "automatic_mode", is_flag = True)
+@click.option("--auto", "automatic_mode", is_flag=True, help="Automatic measurement mode. Invalid measurements will be skipped.")
 def iv(ctx: click.Context, config_path: str, chip_names: list[str], wafer_name: str,
        chip_state_id: str, automatic_mode: bool):
     with click.open_file(config_path) as config_file:
@@ -101,7 +101,7 @@ def iv(ctx: click.Context, config_path: str, chip_names: list[str], wafer_name: 
             validation_config = measurement_config['program']['validation']
             if not validate_raw_measurements(raw_measurements, validation_config):
                 if automatic_mode:
-                    raise abort('Invalid data')
+                    raise RuntimeError('Measurement is invalid')
                 logger.info('\n' + pprint.pformat(raw_measurements, compact=True, indent=4))
                 click.confirm("Do you want to save these measurements?", abort=True, default=True)
             
