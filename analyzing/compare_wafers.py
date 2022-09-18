@@ -79,6 +79,7 @@ def compare_wafers(ctx: click.Context, wafer_names: set[str], chip_state_ids: tu
             if not target_values:
                 continue
 
+            target_values = [value * -1e12 for value in target_values]
             area = Chip.get_area(chip_type)
             perimeter = Chip.get_perimeter(chip_type)
             location = (wafer.name, chip_state.name), (voltage, chip_type, perimeter / area)
