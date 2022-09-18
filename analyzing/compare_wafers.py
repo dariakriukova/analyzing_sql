@@ -60,7 +60,7 @@ def compare_wafers(ctx: click.Context, wafer_names: set[str], chip_state_ids: tu
     codes = list(zip(*product(range(len(voltages)), range(len(chip_types)))))
     columns = pd.MultiIndex(levels=[voltages, chip_types, chip_perimeter_areas],
                             codes=[*codes, codes[1]],
-                            names=['voltage', 'type', 'perimeter/area'])
+                            names=['voltage, V', 'type', 'perimeter/area, mm^-1'])
 
     leakage_df = pd.DataFrame(index=index, columns=columns)
     leak_density_df = pd.DataFrame(index=index, columns=columns)
