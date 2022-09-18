@@ -58,7 +58,7 @@ measurements:
       - :PAGE:GLIS:SCAL:AUTO: ONCE
     program:
       minimum: true
-      chip_kwargs:
+      measurements_kwargs:
         int_time: *int_time_v001
 
   - name: 20v
@@ -97,6 +97,6 @@ measurements:
 
       - :PAGE:DISP:LIST: "'V4','I1', 'I2', 'I3', 'I4'"  # selects the variable names for LIST display
     program:
-      chip_kwargs:
+      measurements_kwargs:
         int_time: *int_time_v20
 

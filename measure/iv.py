@@ -1,3 +1,4 @@
+from os import abort
 import pprint
 import re
 from time import sleep
@@ -49,8 +50,9 @@ def validate_wafer_name(ctx, param, wafer_name: str):
               callback=validate_wafer_name, help="Wafer name.")
 @click.option("-s", "--chip-state", "chip_state_id", prompt="Input chip state",
               help="State of the chips.")
+@click.option("--auto", "automatic_mode", is_flag = True)
 def iv(ctx: click.Context, config_path: str, chip_names: list[str], wafer_name: str,
-       chip_state_id: str):
+       chip_state_id: str, automatic_mode: bool):
     with click.open_file(config_path) as config_file:
         configs = yaml.safe_load(config_file)
 
@@ -98,15 +100,18 @@ def iv(ctx: click.Context, config_path: str, chip_names: list[str], wafer_name: 
         if measurement_config['program'].get('validation'):
             validation_config = measurement_config['program']['validation']
             if not validate_raw_measurements(raw_measurements, validation_config):
+                if automatic_mode:
+                    raise abort('Invalid data')
                 logger.info('\n' + pprint.pformat(raw_measurements, compact=True, indent=4))
                 click.confirm("Do you want to save these measurements?", abort=True, default=True)
+            
 
         for chip_name, chip_config in zip(chip_names, configs['chips'], strict=True):
             chip_id = next(chip.id for chip in wafer.chips if chip.name == chip_name)
             measurements_kwargs = dict(
                 chip_state_id=int(chip_state_id),
                 chip_id=chip_id,
-                **measurement_config['program']['chip_kwargs'],
+                **measurement_config['program']['measurements_kwargs'],
             )
             measurements = create_measurements(raw_measurements, temperature, chip_config,
                                                **measurements_kwargs)

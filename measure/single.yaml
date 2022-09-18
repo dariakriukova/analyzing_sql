@@ -56,7 +56,7 @@ measurements:
             value: !!float 1e-9
             message: Current leakage is too high. Check if there is a light exposure.
             abs: true
-      chip_kwargs:
+      measurements_kwargs:
         int_time: *int_time_v001
 
   - name: 20v
@@ -92,5 +92,5 @@ measurements:
           min:
             value: !!float 5e-3
             message: Current leakage is too low. Check if there is a good contact.
-      chip_kwargs:
+      measurements_kwargs:
         int_time: *int_time_v20
