@@ -24,7 +24,9 @@ jobs:
       - env:
           DB_URL: ${{ secrets.DB_URL }}
         run: |
-          ./dist/analyzing/analyzing.exe --db-url="$env:DB_URL" summary -w TEST
+          ./dist/analyzing/analyzing.exe --db-url="$env:DB_URL" summary-iv -w TEST
+          ./dist/analyzing/analyzing.exe --db-url="$env:DB_URL" summary-cv -w TEST
+          ./dist/analyzing/analyzing.exe --db-url="$env:DB_URL" compare-wafers -w TEST
           ./dist/analyzing/analyzing.exe --db-url="$env:DB_URL" show wafers
       - name: Archive Release
         uses: thedoctor0/zip-release@main
