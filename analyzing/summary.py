@@ -18,7 +18,7 @@ from openpyxl.worksheet.worksheet import Worksheet
 from sqlalchemy.orm import Session, joinedload
 
 from orm import IVMeasurement, CVMeasurement, Wafer, Chip
-from utils import logger, flatten_options
+from utils import logger, flatten_options, iv_thresholds, cv_thresholds
 
 date_formats = ['%Y-%m-%dT%H:%M:%S', '%Y-%m-%d']
 date_formats_help = f"Supported formats are: {', '.join((strftime(f) for f in date_formats))}."
@@ -166,22 +166,12 @@ def save_summary_to_excel(sheets_data: dict, info: pd.Series, file_name: str):
         summary_df = sheets_data['anode'][summary_voltages].rename(columns=float)
         summary_df.to_excel(writer, sheet_name='Summary')
 
-        thresholds = {
-            "X": {'-1': 1e-3, '0.01': -12e-12, '10': -80e-12, '20': -500e-12},
-            'Y': {'-1': 1e-3, '0.01': -15e-12, '10': -120e-12, '20': -1000e-12},
-            'U': {'-1': 1e-3, '0.01': -30e-12, '10': -200e-12, '20': -1200e-12},
-            'V': {'-1': 1e-3, '0.01': -60e-12, '10': -800e-12, '20': -1400e-12},
-            'F': {'-1': 5e-3, '0.01': -40e-12, '10': -2e-9, },
-            'G': {'-1': 5e-3, '0.01': -50e-12, '10': -2e-9, },
-            'E': {'-1': 5e-3, '0.01': -20e-12, '10': -2e-9, },
-            'C': {'-1': 1e-3, '0.01': -20e-12, '10': -1e-9, },
-        }
         rules = {
             'lessThan': PatternFill(bgColor='ee9090', fill_type='solid'),
             'greaterThanOrEqual': PatternFill(bgColor='90ee90', fill_type='solid')
         }
         apply_conditional_formatting(writer.book["Summary"], sheets_data['chip_types'], rules,
-                                     thresholds)
+                                     iv_thresholds)
 
         sheets_data['anode'].rename(columns=float).to_excel(writer, sheet_name='I1 anode')
         sheets_data['cathode'].rename(columns=float).to_excel(writer, sheet_name='I3 cathode')
@@ -194,18 +184,12 @@ def save_cv_summary_to_excel(sheets_data: dict, info: pd.Series, file_name: str)
         summary_df = sheets_data['capacitance'][summary_voltages].rename(columns=float)
         summary_df.to_excel(writer, sheet_name='Summary')
 
-        thresholds = {
-            'X': {'0': 20e-12, '-5': 7.3e-12},
-            'Y': {'0': 65e-12, '-5': 18e-12},
-            'U': {'0': 370e-12, '-5': 95e-12},
-            'V': {'0': 1200e-12, '-5': 320e-12}
-        }
         rules = {
             'greaterThanOrEqual': PatternFill(bgColor='ee9090', fill_type='solid'),
             'lessThan': PatternFill(bgColor='90ee90', fill_type='solid')
         }
         apply_conditional_formatting(writer.book["Summary"], sheets_data['chip_types'], rules,
-                                     thresholds)
+                                     cv_thresholds)
 
         sheets_data['capacitance'].rename(columns=float).to_excel(writer, sheet_name='All data')
         info.to_excel(writer, sheet_name='Info')
