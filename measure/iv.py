@@ -1,4 +1,3 @@
-from os import abort
 import pprint
 import re
 from time import sleep
@@ -6,7 +5,6 @@ from typing import Sequence
 
 import click
 import numpy as np
-import yaml
 from jsonpath_ng import parse
 from pyvisa.resources import GPIBInstrument
 from scipy.optimize import curve_fit
@@ -42,27 +40,23 @@ def validate_wafer_name(ctx, param, wafer_name: str):
 
 @click.command(name='iv', help='Measure IV data of the current chip.')
 @click.pass_context
-@click.option("-c", "--config", "config_path", prompt="Config file path",
-              type=click.Path(exists=True))
 @click.option("-n", "--chip-name", "chip_names", help="Chip name.", callback=validate_chip_names,
               multiple=True, default=[])
 @click.option("-w", "--wafer", "wafer_name", prompt=f"Input wafer name",
               callback=validate_wafer_name, help="Wafer name.")
 @click.option("-s", "--chip-state", "chip_state_id", prompt="Input chip state",
               help="State of the chips.")
-@click.option("--auto", "automatic_mode", is_flag=True, help="Automatic measurement mode. Invalid measurements will be skipped.")
-def iv(ctx: click.Context, config_path: str, chip_names: list[str], wafer_name: str,
-       chip_state_id: str, automatic_mode: bool):
-    with click.open_file(config_path) as config_file:
-        configs = yaml.safe_load(config_file)
-
+@click.option("--auto", "automatic_mode", is_flag=True,
+              help="Automatic measurement mode. Invalid measurements will be skipped.")
+def iv(ctx: click.Context, chip_names: list[str], wafer_name: str, chip_state_id: str,
+       automatic_mode: bool):
     instrument: GPIBInstrument = ctx.obj['instrument']
     session: Session = ctx.obj['session']
-
+    configs: dict = ctx.obj['configs']
     if ctx.obj['simulate']:
         temperature = np.random.rand() * 100
     else:
-        temperature = get_temperature()
+        temperature = get_temperature(configs['instruments']['temperature_resource'])
 
     wafer = session.query(Wafer).filter(Wafer.name == wafer_name) \
         .options(joinedload(Wafer.chips)).one_or_none()
@@ -93,9 +87,9 @@ def iv(ctx: click.Context, config_path: str, chip_names: list[str], wafer_name: 
         set_configs(instrument, measurement_config['instrument'])
 
         if measurement_config['program'].get('minimum'):
-            raw_measurements = get_minimal_measurements(instrument, configs['queries'])
+            raw_measurements = get_minimal_measurements(instrument, configs['measure'])
         else:
-            raw_measurements = get_raw_measurements(instrument, configs['queries'])
+            raw_measurements = get_raw_measurements(instrument, configs['measure'])
 
         if measurement_config['program'].get('validation'):
             validation_config = measurement_config['program']['validation']
@@ -104,7 +98,6 @@ def iv(ctx: click.Context, config_path: str, chip_names: list[str], wafer_name: 
                     raise RuntimeError('Measurement is invalid')
                 logger.info('\n' + pprint.pformat(raw_measurements, compact=True, indent=4))
                 click.confirm("Do you want to save these measurements?", abort=True, default=True)
-            
 
         for chip_name, chip_config in zip(chip_names, configs['chips'], strict=True):
             chip_id = next(chip.id for chip in wafer.chips if chip.name == chip_name)
@@ -120,27 +113,28 @@ def iv(ctx: click.Context, config_path: str, chip_names: list[str], wafer_name: 
     logger.info('Measurements saved')
 
 
-def set_configs(instrument: GPIBInstrument, configs: list[dict]):
-    instrument.write('*CLS')  # clears the Error Queue
-    instrument.write('*RST')  # performs an instrument reset
+def execute_command(instrument: GPIBInstrument, command: str, command_type: str):
+    if command_type == 'query':
+        return instrument.query(command)
+    elif command_type == 'write':
+        return instrument.write(command)
+    elif command_type == 'query_ascii_values':
+        return list(instrument.query_ascii_values(command))
+    else:
+        raise ValueError(f'Invalid command type {command_type}')
 
-    for config in configs:
-        config_name, config_value = next(iter(config.items()))
-        instrument.write(f"{config_name} {config_value}")
+
+def set_configs(instrument: GPIBInstrument, commands: list[str]):
+    for command in commands:
+        instrument.write(command)
 
 
-def get_raw_measurements(instrument: GPIBInstrument, configs: list[dict]) -> dict[str, list]:
-    # starts the single measurement operation
-    instrument.write(":PAGE:SCON:SING")
-    # starts monitoring pending operations and sets/clears the Operation complete
-    instrument.query("*OPC?")
-    # specifies the data format as ASCII
-    instrument.write('FORM:DATA ASC')
-
+def get_raw_measurements(instrument: GPIBInstrument, commands: dict) -> dict[str, list]:
     measurements: dict[str, list] = dict()
-    for config in configs:
-        value = list(instrument.query_ascii_values(config['query']))
-        measurements[config['name']] = value
+    for command in commands:
+        value = execute_command(instrument, command['command'], command['type'])
+        if 'name' in command:
+            measurements[command['name']] = value
     return measurements
 
 
@@ -166,34 +160,36 @@ def validate_raw_measurements(measurements: dict[str, list],
     return True
 
 
-def create_measurements(measurements: dict[str, list], temperature: float, chip_config: dict,
+def create_measurements(raw_measurements: dict[str, list], temperature: float, chip_config: dict,
                         **kwargs) -> list[IVMeasurement]:
-    chip_measurements = zip(measurements[chip_config['voltage']],
-                            measurements[chip_config['anode_current']],
-                            measurements[chip_config['cathode_current']],
-                            strict=True)
-
+    measurement_keys = list(raw_measurements.keys())
+    raw_numbers = zip(*[raw_measurements[key] for key in measurement_keys], strict=True)
     measurements = []
-    for voltage, anode_current, cathode_current in chip_measurements:
+
+    for data in raw_numbers:
+        measurement_kwargs = dict(zip(measurement_keys, data))
+
+        if 'anode_current' in measurement_kwargs:
+            anode_current = measurement_kwargs['anode_current']
+            anode_current_corrected = compute_corrected_current(temperature, anode_current)
+            measurement_kwargs['anode_current_corrected'] = anode_current_corrected
+
         measurements.append(IVMeasurement(
-            voltage_input=voltage,
-            anode_current=anode_current,
-            cathode_current=cathode_current,
-            anode_current_corrected=compute_corrected_current(temperature, anode_current),
             temperature=temperature,
+            **measurement_kwargs,
             **kwargs
         ))
     return measurements
 
 
-def get_minimal_measurements(instrument: GPIBInstrument, configs: list[dict]):
+def get_minimal_measurements(instrument: GPIBInstrument, configs: dict):
     def linear(x, a, b):
         return a + b * x
 
     prev_measurements: dict[str, list] = dict()
     while True:
         raw_measurements = get_raw_measurements(instrument, configs)
-        xdata = raw_measurements['voltage']
+        xdata = raw_measurements['voltage_input']
         if 'anode_current' in raw_measurements:
             ydata = raw_measurements['anode_current']
         elif 'cathode_current' in raw_measurements:
@@ -215,12 +211,13 @@ def compute_corrected_current(temp: float, current: float):
     return 1.15 ** (target_temperature - temp) * current
 
 
-def get_temperature() -> float:
+def get_temperature(sensor_id) -> float:
     errmsg = YRefParam()
     if YAPI.RegisterHub("usb", errmsg) != YAPI.SUCCESS:
         raise RuntimeError("RegisterHub (temperature sensor) error: " + errmsg.value)
 
-    sensor: YTemperature = YTemperature.FindTemperature('PT100MK1-14A17C.temperature')
+    # TODO: does it work with simple 'temperature' instead of sensor_id?
+    sensor: YTemperature = YTemperature.FindTemperature(sensor_id)
     if not (sensor.isOnline()):
         raise RuntimeError('Temperature sensor is not connected')
 

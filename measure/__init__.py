@@ -6,6 +6,7 @@ import click
 import keyring
 import pyvisa
 import sentry_sdk
+import yaml
 from pyvisa import Error
 from sqlalchemy import create_engine
 from sqlalchemy.exc import OperationalError
@@ -18,17 +19,24 @@ from .iv import iv
 
 @click.group(commands=[iv])
 @click.pass_context
+@click.option("-c", "--config", "config_path", required=True, type=click.Path(exists=True),
+              help="Path to config file. See ./measure/configs/*.yaml")
 @click.option("--log-level", default="INFO", help="Log level.", show_default=True,
               type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
                                 case_sensitive=False))
 @click.option("--db-url", help="Database URL.")
 @click.option('--simulate', is_flag=True, help="Simulate pyvisa instrument.", default=False)
-def measure(ctx: click.Context, log_level: str, db_url: Union[str, None], simulate: bool):
+def measure(ctx: click.Context, config_path: str, log_level: str, db_url: Union[str, None],
+            simulate: bool):
     logger.setLevel(log_level)
 
-    ctx.obj = {'simulate': simulate}
+    with click.open_file(config_path) as config_file:
+        configs = yaml.safe_load(config_file)
 
-    # if ctx.invoked_subcommand == iv.name:
+    ctx.obj = {
+        'simulate': simulate,
+        'configs': configs
+    }
 
     try:
         if db_url is None:
@@ -63,11 +71,10 @@ def measure(ctx: click.Context, log_level: str, db_url: Union[str, None], simula
                                           write_termination='\n',
                                           read_termination='\n')
         else:
+            pyvisa_config = configs['instruments']['pyvisa']
             rm = pyvisa.ResourceManager()
-            instrument = rm.open_resource('GPIB0::15::INSTR')
+            instrument = rm.open_resource(pyvisa_config['resource'], **pyvisa_config['kwargs'])
         ctx.with_resource(instrument)
-        instrument.baud_rate = 38400
-        instrument.timeout = 250000  # If error "Timeout is expired" appears, this value can be increased
     except Error as e:
         logger.error(f"PYVISA error: {e}")
         sys.exit()
