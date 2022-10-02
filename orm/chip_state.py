@@ -9,3 +9,6 @@ class ChipState(Base):
 
     id = Column(Integer, primary_key=True, nullable=False)
     name = Column(VARCHAR(length=100))
+
+    def __repr__(self):
+        return "<ChipState(name='%s', id='%d')>" % (self.name, self.id)

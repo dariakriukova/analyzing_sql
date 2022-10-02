@@ -21,5 +21,5 @@ class IVMeasurement(Base):
     datetime = Column(DATETIME, server_default=FetchedValue())
 
     def __repr__(self):
-        return "<IVMeasurement(wafer='%s', chip='%s', id='%d')>" % (
-            self.wafer, self.chip, self.id)
+        return "<IVMeasurement(chip='%s', voltage_input='%s', id='%d')>" % (
+            self.chip.name, self.voltage_input, self.id)

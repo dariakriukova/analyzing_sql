@@ -20,3 +20,6 @@ class Wafer(Base):
             'Created at': self.created_at,
             'Number of chips': len(self.chips)
         })
+
+    def __repr__(self):
+        return "<Wafer(name='%s', id='%d')>" % (self.name, self.id)
