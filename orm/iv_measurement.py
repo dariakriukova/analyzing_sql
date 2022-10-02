@@ -16,7 +16,7 @@ class IVMeasurement(Base):
     temperature = Column(Float)
     voltage_input = Column(DECIMAL(precision=10, scale=5), nullable=False)
     anode_current = Column(Float, nullable=False)
-    cathode_current = Column(Float, nullable=False)
+    cathode_current = Column(Float, nullable=True)
     anode_current_corrected = Column(Float)
     datetime = Column(DATETIME, server_default=FetchedValue())
 

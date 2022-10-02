@@ -120,6 +120,8 @@ def execute_command(instrument: GPIBInstrument, command: str, command_type: str)
         return instrument.write(command)
     elif command_type == 'query_ascii_values':
         return list(instrument.query_ascii_values(command))
+    elif command_type == 'query_csv_values':
+        return [float(value) for value in instrument.query(command).split(',')]
     else:
         raise ValueError(f'Invalid command type {command_type}')
 
