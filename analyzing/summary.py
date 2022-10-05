@@ -40,9 +40,13 @@ date_formats_help = f"Supported formats are: {', '.join((strftime(f) for f in da
               help=f"Include measurements before (exclusive) provided date and time. {date_formats_help}")
 @click.option("--after", type=click.DateTime(formats=date_formats),
               help=f"Include measurements after (inclusive) provided date and time. {date_formats_help}")
+@click.option("--excel-voltages", "excel_voltages", default=["-0.01,-6.0,-10.0,1.0"], multiple=True,
+              show_default=True, callback=flatten_options)
 def summary_iv(ctx: click.Context, chips_type: Union[str, None], wafer_name: str, file_name: str,
-               chip_state_ids: tuple[str], outliers_coefficient: float, before: Union[datetime, None],
-               after: Union[datetime, None]):
+               chip_state_ids: tuple[str], outliers_coefficient: float,
+               before: Union[datetime, None],
+               after: Union[datetime, None],
+               excel_voltages: set[str]):
     session: Session = ctx.obj['session']
     if ctx.obj['default_wafer'].name != wafer_name:
         wafer = session.query(Wafer).filter(Wafer.name == wafer_name).first()
@@ -87,7 +91,7 @@ def summary_iv(ctx: click.Context, chips_type: Union[str, None], wafer_name: str
     exel_file_name = file_name + '.xlsx'
     check_file_exists(exel_file_name)
     info = get_info(ctx, wafer=wafer, chip_state_ids=chip_state_ids, measurements=measurements)
-    save_iv_summary_to_excel(sheets_data, info, exel_file_name)
+    save_iv_summary_to_excel(sheets_data, info, exel_file_name, excel_voltages)
 
     logger.info(f'Summary data is saved to {exel_file_name}')
 
@@ -108,9 +112,13 @@ def summary_iv(ctx: click.Context, chips_type: Union[str, None], wafer_name: str
               help=f"Include measurements before (exclusive) provided date and time. {date_formats_help}")
 @click.option("--after", type=click.DateTime(formats=date_formats),
               help=f"Include measurements after (inclusive) provided date and time. {date_formats_help}")
+@click.option("--excel-voltages", "excel_voltages", default=["-5", "0", "-35"], multiple=True,
+              show_default=True, callback=flatten_options)
 def summary_cv(ctx: click.Context, chips_type: Union[str, None], wafer_name: str, file_name: str,
-               chip_state_ids: list[str], outliers_coefficient: float, before: Union[datetime, None],
-               after: Union[datetime, None]):
+               chip_state_ids: list[str], outliers_coefficient: float,
+               before: Union[datetime, None],
+               after: Union[datetime, None],
+               excel_voltages: set[str]):
     session: Session = ctx.obj['session']
     if ctx.obj['default_wafer'].name != wafer_name:
         wafer = session.query(Wafer).filter(Wafer.name == wafer_name).first()
@@ -155,21 +163,21 @@ def summary_cv(ctx: click.Context, chips_type: Union[str, None], wafer_name: str
     exel_file_name = file_name + '.xlsx'
     check_file_exists(exel_file_name)
     info = get_info(ctx, wafer=wafer, chip_state_ids=chip_state_ids, measurements=measurements)
-    save_cv_summary_to_excel(sheets_data, info, exel_file_name)
+    save_cv_summary_to_excel(sheets_data, info, exel_file_name, excel_voltages)
 
     logger.info(f'Summary data is saved to {exel_file_name}')
 
 
-def save_iv_summary_to_excel(sheets_data: dict, info: pd.Series, file_name: str):
-    with pd.ExcelWriter(file_name) as writer:
-        summary_voltages = list(map(Decimal, ["-1", "0.01", "5", "6", "10", "20"]))
-        summary_df = sheets_data['anode'][summary_voltages].rename(columns=float)
-        summary_df.to_excel(writer, sheet_name='Summary')
+def save_iv_summary_to_excel(sheets_data: dict, info: pd.Series, file_name: str,
+                             voltages: Iterable[str]):
+    summary_df = get_slice_by_voltages(sheets_data['anode'], voltages)
+    rules = {
+        'lessThan': PatternFill(bgColor='ee9090', fill_type='solid'),
+        'greaterThanOrEqual': PatternFill(bgColor='90ee90', fill_type='solid')
+    }
 
-        rules = {
-            'lessThan': PatternFill(bgColor='ee9090', fill_type='solid'),
-            'greaterThanOrEqual': PatternFill(bgColor='90ee90', fill_type='solid')
-        }
+    with pd.ExcelWriter(file_name) as writer:
+        summary_df.rename(columns=float).to_excel(writer, sheet_name='Summary')
         apply_conditional_formatting(writer.book["Summary"], sheets_data['chip_types'], rules,
                                      iv_thresholds)
 
@@ -178,21 +186,38 @@ def save_iv_summary_to_excel(sheets_data: dict, info: pd.Series, file_name: str)
         info.to_excel(writer, sheet_name='Info')
 
 
-def save_cv_summary_to_excel(sheets_data: dict, info: pd.Series, file_name: str):
-    with pd.ExcelWriter(file_name) as writer:
-        summary_voltages = list(map(Decimal, ["-5", "0", "-35"]))
-        summary_df = sheets_data['capacitance'][summary_voltages].rename(columns=float)
-        summary_df.to_excel(writer, sheet_name='Summary')
+def save_cv_summary_to_excel(sheets_data: dict, info: pd.Series, file_name: str,
+                             voltages: Iterable[str]):
+    summary_df = get_slice_by_voltages(sheets_data['capacitance'], voltages)
+    rules = {
+        'greaterThanOrEqual': PatternFill(bgColor='ee9090', fill_type='solid'),
+        'lessThan': PatternFill(bgColor='90ee90', fill_type='solid')
+    }
 
-        rules = {
-            'greaterThanOrEqual': PatternFill(bgColor='ee9090', fill_type='solid'),
-            'lessThan': PatternFill(bgColor='90ee90', fill_type='solid')
-        }
+    with pd.ExcelWriter(file_name) as writer:
+        summary_df.to_excel(writer, sheet_name='Summary')
         apply_conditional_formatting(writer.book["Summary"], sheets_data['chip_types'], rules,
                                      cv_thresholds)
 
         sheets_data['capacitance'].rename(columns=float).to_excel(writer, sheet_name='All data')
         info.to_excel(writer, sheet_name='Info')
+
+
+def get_slice_by_voltages(df: pd.DataFrame, voltages: Iterable[str]) -> pd.DataFrame:
+    columns = sorted(map(Decimal, voltages))
+    slice_df = pd.DataFrame(columns=columns)
+    slice_df = pd.concat((slice_df, df[df.columns.intersection(columns)]), copy=False)
+
+    empty_cols = slice_df.isna().all(axis=0)
+    if empty_cols.any():
+        logger.warn(f"""
+        The following voltages are not present in the data: {
+        [float(col) for col, val in empty_cols.items() if val]
+        }.
+        Use the --excel-voltages option to select the existing voltages.
+        Available voltages: {[float(voltage) for voltage in df.columns]}
+        """)
+    return slice_df
 
 
 def apply_conditional_formatting(sheet: Worksheet, chip_types: list[str], rules: dict[str, Fill],
@@ -211,6 +236,8 @@ def apply_conditional_formatting(sheet: Worksheet, chip_types: list[str], rules:
                 first_row_index = next(i for i, v in chip_row_index if is_current_type(v))
                 last_row_index = next(i for i, v in reversed(chip_row_index) if is_current_type(v))
             except ValueError:
+                continue
+            except StopIteration:
                 continue
 
             column_letter = column_cell.column_letter
@@ -336,7 +363,7 @@ def plot_heat_map(ax: Axes, measurements: list[Generic[T]], low, high,
 
 def plot_data(values: list[Generic[T]], voltages: list[Decimal],
               outliers_coefficient: float, value_extractor: Callable[[T], float]) -> (
-Figure, ndarray[Any, Axes]):
+        Figure, ndarray[Any, Axes]):
     fig, axes = plt.subplots(nrows=len(voltages), ncols=2,
                              figsize=(10, 5 * len(voltages)),
                              gridspec_kw=dict(left=0.08, right=0.95, bottom=0.05, top=0.95,
