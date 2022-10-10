@@ -214,15 +214,17 @@ def compute_corrected_current(temp: float, current: float):
 
 
 def get_temperature(sensor_id) -> float:
-    errmsg = YRefParam()
-    if YAPI.RegisterHub("usb", errmsg) != YAPI.SUCCESS:
-        raise RuntimeError("RegisterHub (temperature sensor) error: " + errmsg.value)
+    try:
+        errmsg = YRefParam()
+        if YAPI.RegisterHub("usb", errmsg) != YAPI.SUCCESS:
+            raise RuntimeError("RegisterHub (temperature sensor) error: " + errmsg.value)
 
-    # TODO: does it work with simple 'temperature' instead of sensor_id?
-    sensor: YTemperature = YTemperature.FindTemperature(sensor_id)
-    if not (sensor.isOnline()):
-        raise RuntimeError('Temperature sensor is not connected')
+        # TODO: does it work with simple 'temperature' instead of sensor_id?
+        sensor: YTemperature = YTemperature.FindTemperature(sensor_id)
+        if not (sensor.isOnline()):
+            raise RuntimeError('Temperature sensor is not connected')
 
-    temperature = sensor.get_currentValue()
-    YAPI.FreeAPI()
+        temperature = sensor.get_currentValue()
+    finally:
+        YAPI.FreeAPI()
     return temperature
