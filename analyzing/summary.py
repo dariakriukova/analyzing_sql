@@ -2,11 +2,12 @@ from datetime import datetime, date
 from decimal import Decimal
 from os.path import exists as file_exists
 from time import strftime, localtime
-from typing import Union, Any, TypeVar, Generic, Callable, Iterable
+from typing import Union, Any, TypeVar, Generic, Callable, Iterable, Sequence, Optional
 
 import click
 import numpy as np
 import pandas as pd
+from click import Context
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
@@ -22,6 +23,34 @@ from utils import logger, flatten_options, iv_thresholds, cv_thresholds
 
 date_formats = ['%Y-%m-%dT%H:%M:%S', '%Y-%m-%d']
 date_formats_help = f"Supported formats are: {', '.join((strftime(f) for f in date_formats))}."
+
+IV_VOLTAGE_PRESETS = {
+    'sm': '-0.01,-6.0,-10.0,1.0',
+    'raptor': '-0.01,-5.0,-10.0,1.0',
+    'micronova': '-1.0,0.01,5.0,6.0,10.0,20.0',
+}
+
+
+class VoltagesOption(click.Option):
+    def __init__(self,
+                 param_decls: Sequence[str],
+                 presets: dict[str, Sequence[Decimal]],
+                 *args,
+                 **kwargs: Any) -> None:
+        self.presets = presets
+        super().__init__(param_decls, *args, **kwargs)
+
+    def type_cast_value(self, ctx, value):
+        if value in self.presets:
+            value = self.presets[value]
+
+        value = flatten_options(ctx, self, [value])
+        return list(map(Decimal, value))
+
+    def get_help_record(self, ctx: Context) -> Optional[tuple[str, str]]:
+        names, *_ = super().get_help_record(ctx)
+        presets = '\n'.join(f"{name} ({voltages})" for name, voltages in self.presets.items())
+        return names, self.help + f"\n\nPresets:\n{presets}."
 
 
 @click.command(name='summary-iv',
@@ -40,13 +69,14 @@ date_formats_help = f"Supported formats are: {', '.join((strftime(f) for f in da
               help=f"Include measurements before (exclusive) provided date and time. {date_formats_help}")
 @click.option("--after", type=click.DateTime(formats=date_formats),
               help=f"Include measurements after (inclusive) provided date and time. {date_formats_help}")
-@click.option("--excel-voltages", "excel_voltages", default=["-0.01,-6.0,-10.0,1.0"], multiple=True,
-              show_default=True, callback=flatten_options)
+@click.option("--voltages", "voltages", default=IV_VOLTAGE_PRESETS['sm'],
+              cls=VoltagesOption, presets=IV_VOLTAGE_PRESETS,
+              help="List of voltages used to build the summary excel sheet.")
 def summary_iv(ctx: click.Context, chips_type: Union[str, None], wafer_name: str, file_name: str,
                chip_state_ids: tuple[str], outliers_coefficient: float,
                before: Union[datetime, None],
                after: Union[datetime, None],
-               excel_voltages: set[str]):
+               voltages: list[Decimal]):
     session: Session = ctx.obj['session']
     if ctx.obj['default_wafer'].name != wafer_name:
         wafer = session.query(Wafer).filter(Wafer.name == wafer_name).first()
@@ -76,9 +106,8 @@ def summary_iv(ctx: click.Context, chips_type: Union[str, None], wafer_name: str
         return
 
     sheets_data = get_sheets_data(measurements)
-    plot_summary_voltages = list(map(Decimal, ["0.01", "5"]))
     value_extractor = lambda m: m.anode_current_corrected or m.anode_current
-    fig, axes = plot_data(measurements, plot_summary_voltages, outliers_coefficient,
+    fig, axes = plot_data(measurements, voltages, outliers_coefficient,
                           value_extractor)
     for [ax, _] in axes:
         ax.set_xlabel("Anode current [pA]")
@@ -91,7 +120,7 @@ def summary_iv(ctx: click.Context, chips_type: Union[str, None], wafer_name: str
     exel_file_name = file_name + '.xlsx'
     check_file_exists(exel_file_name)
     info = get_info(ctx, wafer=wafer, chip_state_ids=chip_state_ids, measurements=measurements)
-    save_iv_summary_to_excel(sheets_data, info, exel_file_name, excel_voltages)
+    save_iv_summary_to_excel(sheets_data, info, exel_file_name, voltages)
 
     logger.info(f'Summary data is saved to {exel_file_name}')
 
@@ -112,13 +141,13 @@ def summary_iv(ctx: click.Context, chips_type: Union[str, None], wafer_name: str
               help=f"Include measurements before (exclusive) provided date and time. {date_formats_help}")
 @click.option("--after", type=click.DateTime(formats=date_formats),
               help=f"Include measurements after (inclusive) provided date and time. {date_formats_help}")
-@click.option("--excel-voltages", "excel_voltages", default=["-5", "0", "-35"], multiple=True,
+@click.option("--voltages", "voltages", default=["-5", "0", "-35"], multiple=True,
               show_default=True, callback=flatten_options)
 def summary_cv(ctx: click.Context, chips_type: Union[str, None], wafer_name: str, file_name: str,
                chip_state_ids: list[str], outliers_coefficient: float,
                before: Union[datetime, None],
                after: Union[datetime, None],
-               excel_voltages: set[str]):
+               voltages: set[str]):
     session: Session = ctx.obj['session']
     if ctx.obj['default_wafer'].name != wafer_name:
         wafer = session.query(Wafer).filter(Wafer.name == wafer_name).first()
@@ -148,9 +177,9 @@ def summary_cv(ctx: click.Context, chips_type: Union[str, None], wafer_name: str
         return
 
     sheets_data = get_sheets_cv_data(measurements)
-    plot_summary_voltages = list(map(Decimal, ["-5", "0"]))
     value_extractor = lambda m: m.capacitance
-    fig, axes = plot_data(measurements, plot_summary_voltages, outliers_coefficient,
+    voltages = sorted(Decimal(v) for v in voltages)
+    fig, axes = plot_data(measurements, voltages, outliers_coefficient,
                           value_extractor)
     for [ax, _] in axes:
         ax.set_xlabel("Capacitance [pF]")
@@ -163,13 +192,13 @@ def summary_cv(ctx: click.Context, chips_type: Union[str, None], wafer_name: str
     exel_file_name = file_name + '.xlsx'
     check_file_exists(exel_file_name)
     info = get_info(ctx, wafer=wafer, chip_state_ids=chip_state_ids, measurements=measurements)
-    save_cv_summary_to_excel(sheets_data, info, exel_file_name, excel_voltages)
+    save_cv_summary_to_excel(sheets_data, info, exel_file_name, voltages)
 
     logger.info(f'Summary data is saved to {exel_file_name}')
 
 
 def save_iv_summary_to_excel(sheets_data: dict, info: pd.Series, file_name: str,
-                             voltages: Iterable[str]):
+                             voltages: Iterable[Decimal]):
     summary_df = get_slice_by_voltages(sheets_data['anode'], voltages)
     rules = {
         'lessThan': PatternFill(bgColor='ee9090', fill_type='solid'),
@@ -187,7 +216,7 @@ def save_iv_summary_to_excel(sheets_data: dict, info: pd.Series, file_name: str,
 
 
 def save_cv_summary_to_excel(sheets_data: dict, info: pd.Series, file_name: str,
-                             voltages: Iterable[str]):
+                             voltages: Iterable[Decimal]):
     summary_df = get_slice_by_voltages(sheets_data['capacitance'], voltages)
     rules = {
         'greaterThanOrEqual': PatternFill(bgColor='ee9090', fill_type='solid'),
@@ -203,8 +232,8 @@ def save_cv_summary_to_excel(sheets_data: dict, info: pd.Series, file_name: str,
         info.to_excel(writer, sheet_name='Info')
 
 
-def get_slice_by_voltages(df: pd.DataFrame, voltages: Iterable[str]) -> pd.DataFrame:
-    columns = sorted(map(Decimal, voltages))
+def get_slice_by_voltages(df: pd.DataFrame, voltages: Iterable[Decimal]) -> pd.DataFrame:
+    columns = sorted(voltages)
     slice_df = pd.DataFrame(columns=columns)
     slice_df = pd.concat((slice_df, df[df.columns.intersection(columns)]), copy=False)
 
@@ -370,6 +399,8 @@ def plot_data(values: list[Generic[T]], voltages: list[Decimal],
                                               wspace=0.3, hspace=0.35))
     for i, voltage in enumerate(voltages):
         target_values = [value for value in values if value.voltage_input == voltage]
+        if len(target_values) == 0:
+            continue
         data = np.array([value_extractor(value) for value in target_values])
 
         outliers_idx = get_outliers_idx(data, outliers_coefficient)
