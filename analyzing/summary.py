@@ -71,7 +71,7 @@ class VoltagesOption(click.Option):
               help=f"Include measurements after (inclusive) provided date and time. {date_formats_help}")
 @click.option("--voltages", "voltages", default=IV_VOLTAGE_PRESETS['sm'],
               cls=VoltagesOption, presets=IV_VOLTAGE_PRESETS,
-              help="List of voltages used to build the summary excel sheet.")
+              help="List of voltages to include in summary.")
 def summary_iv(ctx: click.Context, chips_type: Union[str, None], wafer_name: str, file_name: str,
                chip_state_ids: tuple[str], outliers_coefficient: float,
                before: Union[datetime, None],
@@ -142,7 +142,8 @@ def summary_iv(ctx: click.Context, chips_type: Union[str, None], wafer_name: str
 @click.option("--after", type=click.DateTime(formats=date_formats),
               help=f"Include measurements after (inclusive) provided date and time. {date_formats_help}")
 @click.option("--voltages", "voltages", default=["-5", "0", "-35"], multiple=True,
-              show_default=True, callback=flatten_options)
+              show_default=True, callback=flatten_options,
+              help="List of voltages to include in summary.")
 def summary_cv(ctx: click.Context, chips_type: Union[str, None], wafer_name: str, file_name: str,
                chip_state_ids: list[str], outliers_coefficient: float,
                before: Union[datetime, None],
@@ -239,11 +240,12 @@ def get_slice_by_voltages(df: pd.DataFrame, voltages: Iterable[Decimal]) -> pd.D
 
     empty_cols = slice_df.isna().all(axis=0)
     if empty_cols.any():
+        voltages_option = next(p for p in summary_iv.params if p.name == 'voltages')
         logger.warn(f"""
         The following voltages are not present in the data: {
         [float(col) for col, val in empty_cols.items() if val]
         }.
-        Use the --excel-voltages option to select the existing voltages.
+        Use the {voltages_option.opts[0]} option to select the existing voltages.
         Available voltages: {[float(voltage) for voltage in df.columns]}
         """)
     return slice_df
@@ -397,6 +399,8 @@ def plot_data(values: list[Generic[T]], voltages: list[Decimal],
                              figsize=(10, 5 * len(voltages)),
                              gridspec_kw=dict(left=0.08, right=0.95, bottom=0.05, top=0.95,
                                               wspace=0.3, hspace=0.35))
+    axes = axes.reshape(-1, 2)
+
     for i, voltage in enumerate(voltages):
         target_values = [value for value in values if value.voltage_input == voltage]
         if len(target_values) == 0:
