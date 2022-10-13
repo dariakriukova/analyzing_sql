@@ -1,6 +1,7 @@
 from decimal import Decimal
 from itertools import product
 from time import strftime
+from typing import Iterable
 
 import click
 import numpy as np
@@ -8,7 +9,7 @@ import pandas as pd
 from sqlalchemy.orm import Session, contains_eager
 
 from orm import Wafer, Chip, IVMeasurement
-from utils import logger, flatten_options, iv_thresholds
+from utils import logger, flatten_options, iv_thresholds, IV_VOLTAGE_PRESETS, VoltagesOption
 
 
 @click.command(name="compare-wafers", help='Compare wafers')
@@ -20,11 +21,14 @@ from utils import logger, flatten_options, iv_thresholds
 @click.option("-o", "--output", "file_name",
               default=lambda: f"wafers-comparison-{strftime('%y%m%d-%H%M%S')}.xlsx",
               help="Output file name.", show_default="wafers-comparison-{datetime}.xlsx")
+@click.option("--voltages", "compare_voltages", default=IV_VOLTAGE_PRESETS['sm'],
+              cls=VoltagesOption, presets=IV_VOLTAGE_PRESETS,
+              help="List of voltages to include in comparison.")
 def compare_wafers(ctx: click.Context, wafer_names: set[str], chip_state_ids: tuple[str],
-                   file_name: str):
+                   file_name: str, compare_voltages: Iterable[Decimal]):
     session: Session = ctx.obj['session']
 
-    compare_voltages = set(map(Decimal, ("0.01", "10", "20")))
+    compare_voltages = set(compare_voltages)
     threshold_voltages = set(map(Decimal, {v for x in iv_thresholds.values() for v in x}))
 
     wafers_query = session.query(Wafer).filter(Wafer.name.in_(wafer_names))
@@ -104,6 +108,7 @@ def compare_wafers(ctx: click.Context, wafer_names: set[str], chip_state_ids: tu
             yield_value = np.mean([value > leakage_threshold for value in target_values])
             yield_df.loc[location] = "{:.2%}".format(yield_value)
 
+    logger.info('Computing total yields...')
     total_yield_series = pd.Series(index=index, name='Total yield', dtype='str')
     for wafer, chip_state in product(wafers, chip_states):
         target_chips = [chip for chip in chips if chip.wafer == wafer]
