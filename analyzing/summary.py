@@ -2,12 +2,11 @@ from datetime import datetime, date
 from decimal import Decimal
 from os.path import exists as file_exists
 from time import strftime, localtime
-from typing import Union, Any, TypeVar, Generic, Callable, Iterable, Sequence, Optional
+from typing import Union, Any, TypeVar, Generic, Callable, Iterable
 
 import click
 import numpy as np
 import pandas as pd
-from click import Context
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
@@ -19,38 +18,17 @@ from openpyxl.worksheet.worksheet import Worksheet
 from sqlalchemy.orm import Session, joinedload
 
 from orm import IVMeasurement, CVMeasurement, Wafer, Chip
-from utils import logger, flatten_options, iv_thresholds, cv_thresholds
+from utils import (
+    logger,
+    flatten_options,
+    iv_thresholds,
+    cv_thresholds,
+    IV_VOLTAGE_PRESETS,
+    VoltagesOption,
+)
 
 date_formats = ['%Y-%m-%dT%H:%M:%S', '%Y-%m-%d']
 date_formats_help = f"Supported formats are: {', '.join((strftime(f) for f in date_formats))}."
-
-IV_VOLTAGE_PRESETS = {
-    'sm': '-0.01,-6.0,-10.0,1.0',
-    'raptor': '-0.01,-5.0,-10.0,1.0',
-    'micronova': '-1.0,0.01,5.0,6.0,10.0,20.0',
-}
-
-
-class VoltagesOption(click.Option):
-    def __init__(self,
-                 param_decls: Sequence[str],
-                 presets: dict[str, Sequence[Decimal]],
-                 *args,
-                 **kwargs: Any) -> None:
-        self.presets = presets
-        super().__init__(param_decls, *args, **kwargs)
-
-    def type_cast_value(self, ctx, value):
-        if value in self.presets:
-            value = self.presets[value]
-
-        value = flatten_options(ctx, self, [value])
-        return list(map(Decimal, value))
-
-    def get_help_record(self, ctx: Context) -> Optional[tuple[str, str]]:
-        names, *_ = super().get_help_record(ctx)
-        presets = '\n'.join(f"{name} ({voltages})" for name, voltages in self.presets.items())
-        return names, self.help + f"\n\nPresets:\n{presets}."
 
 
 @click.command(name='summary-iv',
@@ -76,7 +54,7 @@ def summary_iv(ctx: click.Context, chips_type: Union[str, None], wafer_name: str
                chip_state_ids: tuple[str], outliers_coefficient: float,
                before: Union[datetime, None],
                after: Union[datetime, None],
-               voltages: list[Decimal]):
+               voltages: Iterable[Decimal]):
     session: Session = ctx.obj['session']
     if ctx.obj['default_wafer'].name != wafer_name:
         wafer = session.query(Wafer).filter(Wafer.name == wafer_name).first()
@@ -392,7 +370,7 @@ def plot_heat_map(ax: Axes, measurements: list[Generic[T]], low, high,
     ax.figure.colorbar(mesh, ax=ax)
 
 
-def plot_data(values: list[Generic[T]], voltages: list[Decimal],
+def plot_data(values: list[Generic[T]], voltages: Iterable[Decimal],
               outliers_coefficient: float, value_extractor: Callable[[T], float]) -> (
         Figure, ndarray[Any, Axes]):
     fig, axes = plt.subplots(nrows=len(voltages), ncols=2,
@@ -401,7 +379,7 @@ def plot_data(values: list[Generic[T]], voltages: list[Decimal],
                                               wspace=0.3, hspace=0.35))
     axes = axes.reshape(-1, 2)
 
-    for i, voltage in enumerate(voltages):
+    for i, voltage in enumerate(sorted(voltages)):
         target_values = [value for value in values if value.voltage_input == voltage]
         if len(target_values) == 0:
             continue
