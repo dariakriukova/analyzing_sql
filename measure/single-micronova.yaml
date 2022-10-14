@@ -4,10 +4,10 @@
 instruments:
   temperature_resource: "PT100MK1-14A17C.temperature"
   pyvisa:
+    name: 'HEWLETT-PACKARD,4156A,0,01.05:01.04:01.00'
     resource: "GPIB0::15::INSTR"
     kwargs:
       timeout: 250000
-      baud_rate: 38400
 
 measure:
   - command: ":PAGE:SCON:SING" # starts the single measurement operation
