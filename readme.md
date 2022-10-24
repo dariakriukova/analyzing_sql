@@ -15,7 +15,7 @@
 2. Install PipEnv python module
    `pip install --user pipenv`
 3. Clone this repository
-   `git clone https://github.com/dariakriukova/analyzing_sql.git`
+   `git clone https://github.com/dariakriukova/analyzing_sql.git`[]()
 4. Navigate to the project directory
    `cd analyzing_sql`
 5. Install python dependencies
@@ -39,24 +39,27 @@
 
 ## Usage
 
-Running the program: `python analyzing.py --help`
+Running the program: `python analyzing.exe --help`
 
 ```
 Usage: analyzing.py [OPTIONS] COMMAND [ARGS]...
 
 Options:
-  --help  Show this message and exit.
+  --log-level [DEBUG|INFO|WARNING|ERROR|CRITICAL]
+                                  Log level.  [default: INFO]
+  --db-url TEXT                   Database URL.
+  --help                          Show this message and exit.
 
 Commands:
-  parse-cv    Parse .dat files with CV measurements and save to database
-  parse-iv    Parse .dat files with IV measurements and save to database
-  set-db      Set database credentials.
-  show        Show data from database
-  summary-cv  Make summary-cv files (png and xlsx) for CV measurements'...
-  summary-iv  Make summary-iv files (png and xlsx) for IV measurements'...
+  compare-wafers  Compare wafers
+  parse-cv        Parse .dat files with CV measurements and save to database
+  parse-iv        Parse .dat files with IV measurements and save to database
+  set-db          Set database credentials.
+  show            Show data from database
+  summary-cv      Make summary (png and xlsx) for CV measurements' data.
+  summary-iv      Make summary (png and xlsx) for IV measurements' data.
 ```
 
 ### TODO
 
-- [ ] New type of summary: compare wafers by leakage density
 - [ ] Add database migrations

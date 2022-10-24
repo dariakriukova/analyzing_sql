@@ -32,7 +32,7 @@ date_formats_help = f"Supported formats are: {', '.join((strftime(f) for f in da
 
 
 @click.command(name='summary-iv',
-               help="Make summary-iv files (png and xlsx) for IV measurements' data.")
+               help="Make summary (png and xlsx) for IV measurements' data.")
 @click.pass_context
 @click.option("-t", "--chips-type", help="Type of the chips to analyze.")
 @click.option("-w", "--wafer", "wafer_name", prompt=f"Wafer name", help="Wafer name.")
@@ -104,7 +104,7 @@ def summary_iv(ctx: click.Context, chips_type: Union[str, None], wafer_name: str
 
 
 @click.command(name='summary-cv',
-               help="Make summary-cv files (png and xlsx) for CV measurements' data.")
+               help="Make summary (png and xlsx) for CV measurements' data.")
 @click.pass_context
 @click.option("-t", "--chips-type", help="Type of the chips to analyze.")
 @click.option("-w", "--wafer", "wafer_name", prompt=f"Wafer name", help="Wafer name.")
