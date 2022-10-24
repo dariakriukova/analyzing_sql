@@ -32,4 +32,4 @@ class VoltagesOption(click.Option):
     def get_help_record(self, ctx: Context) -> Optional[tuple[str, str]]:
         names, *_ = super().get_help_record(ctx)
         presets = '\n'.join(f"{name} ({voltages})" for name, voltages in self.presets.items())
-        return names, self.help + f"\n\nPresets:\n{presets}."
+        return names, self.help + f"\n\n\b\nPresets:\n{presets}."

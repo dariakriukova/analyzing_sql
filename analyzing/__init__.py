@@ -56,7 +56,7 @@ def analyzing(ctx: click.Context, log_level: str, db_url: Union[str, None]):
             chip_state_option = next((o for o in active_command.params if o.name == 'chip_state_ids'))
             chip_state_option.type = CsvChoice(
                 [str(state.id) for state in chip_states] + chip_state_option.default)
-            chip_state_option.help = chip_state_option.help + "\n\n" + "\n".join(
+            chip_state_option.help = chip_state_option.help + "\n\n\b\n" + "\n".join(
                 ["{} - {};".format(state.id, state.name) for state in chip_states])
 
         if active_command in (summary_cv, summary_iv):
