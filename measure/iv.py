@@ -16,7 +16,7 @@ from utils import logger
 
 
 def validate_chip_names(ctx, param, chip_names: Sequence[str]):
-    chip_types = ['C', 'E', 'F', 'G', 'U', 'V', 'X', 'Y']
+    chip_types = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'U', 'V', 'X', 'Y']
     matcher = re.compile(rf'^[{"".join(chip_types)}]\d{{4}}$')
     valid_chip_names = []
     for chip_name in map(lambda name: name.upper(), chip_names):
@@ -31,10 +31,10 @@ def validate_wafer_name(ctx, param, wafer_name: str):
     wafer_name = wafer_name.upper()
     if wafer_name == 'TEST':
         return wafer_name
-    matcher = re.compile(r'^\w{2,3}\d{1,2}$')
+    matcher = re.compile(r'^\w{2,3}\d{1,2}(-\w\d{4})?$')
     if not matcher.match(wafer_name):
         raise click.BadParameter(
-            f'{wafer_name} is not valid wafer name. It must be in format LLX(X) where L is a letter and X is a number.')
+            f'{wafer_name} is not valid wafer name. It must be in format LL[L]X[X][-LXXXX] where L is a letter and X is a number.')
     return wafer_name
 
 
