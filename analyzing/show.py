@@ -4,6 +4,7 @@ from IPython.display import display
 from sqlalchemy.orm import Session, joinedload
 
 from orm import Wafer, Chip
+from utils import logger
 
 
 @click.command(name='wafers', help="""Show all wafers.
@@ -27,12 +28,15 @@ def wafers(ctx: click.Context):
 
 @click.command(name='chips', help="Show all chips")
 @click.pass_context
-def chips(ctx: click.Context):
+@click.option('--limit', help="Limit the number of chips to show", default=100, show_default=True)
+def chips(ctx: click.Context, limit: int):
     session: Session = ctx.obj['session']
-    chip_entities = session.query(Chip).order_by(Chip.id).options(
-        joinedload(Chip.wafer)).all()
+    chip_entities = session.query(Chip).order_by(Chip.id.desc()).options(
+        joinedload(Chip.wafer)).limit(limit).all()
     data = pd.DataFrame([chip.to_series() for chip in chip_entities])
     display(data.to_string(col_space=[10, 10]))
+    logger.info(
+        f"Showing last {len(chip_entities)} of {session.query(Chip).count()} chips. Use --limit option to increase that number.")
 
 
 @click.group(commands=[wafers, chips], help="Show data from database")
