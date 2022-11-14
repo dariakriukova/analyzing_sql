@@ -6,7 +6,6 @@ instruments:
     resource: "GPIB0::15::INSTR"
     kwargs:
       timeout: 250000
-      baud_rate: 38400
 
 measure:
   - command: ":PAGE:SCON:SING" # starts the single measurement operation
@@ -15,16 +14,21 @@ measure:
     type: "query"
   - command: "FORM:DATA ASC" # specifies the data format as ASCII
     type: "write"
-  - name: voltage_input
-    query: ":DATA? 'V4'"
-  - name: anode_current_1
-    query: ":DATA? 'I1'"
-  - name: anode_current_2
-    query: ":DATA? 'I2'"
-  - name: anode_current_3
-    query: ":DATA? 'I3'"
-  - name: cathode_current
-    query: ":DATA? 'I4'"
+  - command: ":DATA? 'V4'"
+    type: "query_ascii_values"
+    name: voltage_input
+  - command: ":DATA? 'I1'"
+    type: "query_ascii_values"
+    name: anode_current_1
+  - command: ":DATA? 'I2'"
+    type: "query_ascii_values"
+    name: anode_current_2
+  - command: ":DATA? 'I3'"
+    type: "query_ascii_values"
+    name: anode_current_3
+  - command: ":DATA? 'I4'"
+    type: "query_ascii_values"
+    name: cathode_current
 chips:
   - voltage_input: voltage_input
     anode_current: anode_current_1
@@ -76,6 +80,16 @@ measurements:
       - ":PAGE:GLIS:SCAL:AUTO ONCE"
     program:
       minimum: true
+      validation:
+        cathode_current[0]:
+          min:
+            value: !!float 1e-12
+            message: Current leakage is too low. Check if there is a good contact.
+            abs: true
+          max:
+            value: !!float 1e-9
+            message: Current leakage is too high. Check if there is a light exposure.
+            abs: true
       measurements_kwargs:
         int_time: SHORT
 
@@ -117,6 +131,12 @@ measurements:
 
       - ":PAGE:DISP:LIST 'V4','I1', 'I2', 'I3', 'I4'"  # selects the variable names for LIST display
     program:
+      validation:
+        cathode_current[-3]: # -1 volt
+          min:
+            value: !!float 5e-3
+            message: Current leakage is too low. Check if there is a good contact.
+            abs: true
       measurements_kwargs:
         int_time: MED
 

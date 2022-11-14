@@ -164,12 +164,12 @@ def validate_raw_measurements(measurements: dict[str, list],
 
 def create_measurements(raw_measurements: dict[str, list], temperature: float, chip_config: dict,
                         **kwargs) -> list[IVMeasurement]:
-    measurement_keys = list(raw_measurements.keys())
-    raw_numbers = zip(*[raw_measurements[key] for key in measurement_keys], strict=True)
+    kwarg_keys = list(chip_config.keys())
+    raw_numbers = zip(*[raw_measurements[chip_config[key]] for key in kwarg_keys], strict=True)
     measurements = []
 
     for data in raw_numbers:
-        measurement_kwargs = dict(zip(measurement_keys, data))
+        measurement_kwargs = dict(zip(kwarg_keys, data))
 
         if 'anode_current' in measurement_kwargs:
             anode_current = measurement_kwargs['anode_current']
