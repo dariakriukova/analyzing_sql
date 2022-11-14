@@ -27,8 +27,10 @@ from .cv import cv
                                 case_sensitive=False))
 @click.option("--db-url", help="Database URL.")
 @click.option('--simulate', is_flag=True, help="Simulate pyvisa instrument.", default=False)
+@click.option("--dry-run", is_flag=True, default=False,
+              help="Don't save measurements to the database.")
 def measure(ctx: click.Context, config_path: str, log_level: str, db_url: Union[str, None],
-            simulate: bool):
+            simulate: bool, dry_run: bool):
     logger.setLevel(log_level)
 
     with click.open_file(config_path) as config_file:
@@ -46,6 +48,11 @@ def measure(ctx: click.Context, config_path: str, log_level: str, db_url: Union[
         engine = create_engine(db_url,
                                echo="debug" if logger.getEffectiveLevel() == logging.DEBUG else False)
         session = Session(bind=engine)
+
+        if dry_run:
+            session.commit = lambda: None
+            session.flush = lambda: None
+
         ctx.with_resource(session)
         chip_states = session.query(ChipState).all()
 
