@@ -12,11 +12,13 @@ class Wafer(Base):
     name = Column(VARCHAR(length=20))
     chips = relationship("Chip", back_populates='wafer')
     record_created_at = Column(DATETIME, server_default=FetchedValue(), name='record_created_at')
+    batch_id = Column(VARCHAR(length=10))
 
     def to_series(self) -> pd.Series:
         return pd.Series({
             'Name': self.name,
             'Created at': self.record_created_at,
+            'Batch': self.batch_id,
             'Number of chips': len(self.chips)
         })
 
