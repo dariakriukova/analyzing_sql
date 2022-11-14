@@ -18,16 +18,26 @@ jobs:
           cache: 'pipenv'
 
       - run: pip install pipenv
-      - run: pipenv install --dev
+      - run: pipenv install --dev --deploy
+      - name: Test measure.py
+        env:
+          DB_URL: ${{ secrets.DB_URL }}
+        run: |
+          ./measure.py --db-url="$env:DB_URL" --config measure/box.yaml --simulate --dry-run iv -w TEST -s 1 -n X1023 -n X1024 -n X1022 --auto
+          ./measure.py --db-url="$env:DB_URL" --config measure/single-innopoli.yaml --simulate --dry-run iv -w TEST -s 1 -n X1023 --auto
+          ./measure.py --db-url="$env:DB_URL" --config measure/single-micronova.yaml --simulate --dry-run iv -w TEST -s 1 -n X1023 --auto
+          ./measure.py --db-url="$env:DB_URL" --config measure/cv-innopoli.yaml --simulate --dry-run cv -w TEST -s 1 -n X1023 --auto
       - run: pipenv run pyinstaller analyzing.py
         id: pyinstaller
-      - env:
+      - name: Test analyzing.exe
+        env:
           DB_URL: ${{ secrets.DB_URL }}
         run: |
           ./dist/analyzing/analyzing.exe --db-url="$env:DB_URL" summary-iv -w TEST
           ./dist/analyzing/analyzing.exe --db-url="$env:DB_URL" summary-cv -w TEST
           ./dist/analyzing/analyzing.exe --db-url="$env:DB_URL" compare-wafers -w TEST
           ./dist/analyzing/analyzing.exe --db-url="$env:DB_URL" show wafers
+          ./dist/analyzing/analyzing.exe --db-url="$env:DB_URL" show chips
       - name: Archive Release
         uses: thedoctor0/zip-release@main
         with:
