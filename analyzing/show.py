@@ -10,7 +10,7 @@ from orm import Wafer, Chip
 @click.pass_context
 def wafers(ctx: click.Context):
     session: Session = ctx.obj['session']
-    wafer_entities = session.query(Wafer).order_by(Wafer.created_at).options(
+    wafer_entities = session.query(Wafer).order_by(Wafer.record_created_at).options(
         joinedload(Wafer.chips)).all()
     data = pd.DataFrame([wafer.to_series() for wafer in wafer_entities])
     display(data.to_string(col_space=[10, 25, 8]))

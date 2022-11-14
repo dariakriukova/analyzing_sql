@@ -60,7 +60,7 @@ def analyzing(ctx: click.Context, log_level: str, db_url: Union[str, None]):
                 ["{} - {};".format(state.id, state.name) for state in chip_states])
 
         if active_command in (summary_cv, summary_iv):
-            last_wafer = session.query(Wafer).order_by(desc(Wafer.created_at)).first()
+            last_wafer = session.query(Wafer).order_by(desc(Wafer.record_created_at)).first()
             default_wafer_name = last_wafer.name
             wafer_option = next((o for o in active_command.params if o.name == 'wafer_name'))
             wafer_option.default = default_wafer_name
