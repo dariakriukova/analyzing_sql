@@ -6,7 +6,7 @@ instruments:
     resource: "GPIB0::15::INSTR"
     kwargs:
       timeout: 250000
-      baud_rate: 38400
+      #baud_rate: 38400
 
 measure:
   - command: ":PAGE:SCON:SING" # starts the single measurement operation
