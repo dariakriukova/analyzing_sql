@@ -100,7 +100,7 @@ measurements:
       - "smua.trigger.count = points" # number of points to output
     program:
       validation:
-        anode_current[-1]:
+        anode_current[1]:
           min:
             value: !!float 5e-3
             message: Current leakage is too low. Check if there is a good contact.
