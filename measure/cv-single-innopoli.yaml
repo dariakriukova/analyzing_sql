@@ -1,0 +1,65 @@
+# Contains a set of instructions for a single chip IV measurement on Keithley SMU 2636 (Innopoli)
+
+instruments:
+  temperature_resource: "PT100MK1-1DCBA1.temperature"
+  pyvisa:
+    resource: "GPIB0::17::INSTR"
+    kwargs:
+      timeout: 15000
+
+
+measure:
+  - command: ":TRIG:IMM"
+    type: "write"
+  - command: ":MEM:READ? DBUF"
+    type: "query_ascii_values"
+    name: output
+  - command: ":MEM:CLE DBUF"
+    type: "write"
+
+chips:
+  - voltage_list: voltage_input
+    capacitance: output[::2]
+    output: [item for item in output if item!= 0.0]
+
+
+measurements:
+  - name: 7points
+    instrument:
+      - "*RST; *CLS"
+      - ":INIT:CONT"
+      - ":TRIG:SOUR EXT"
+      - ":FUNC:IMP:TYPE CSD"
+      - ":FREQ:CW 100000"
+      - ":VOLT:LEVEL 0.02"
+      - ":APER MED"
+      - ":FUNC:IMP:RANGE:AUTO ON"
+      - "voltage_list = [-35, -25, -20, -15, -10, -5, 0]" 
+      - ":DISP:PAGE LIST" 
+      - ":FORM:DATA ASC" 
+      - ":LIST:MODE SEQ" 
+      - ":LIST:BIAS:VOLT ", str(voltage_list).split('[')[1].split(']')[0]
+      - ":MMEM EXT" 
+      - ":BIAS:STAT 1" 
+    
+
+      # Buffer
+      - ":MEM:DIM DBUF, ", str(len(voltage_list)) 
+      - ":MEM:FILL DBUF" 
+      - ":MEM:CLE DBUF"
+
+      # Trigger the measurement
+      - ":TRIG:IMM"
+
+    program:
+      measurements_kwargs:
+        int_time: MED # depends on ":APER MED"
+
+    program:
+      validation:
+        capacitance[0]:
+          min:
+            value: !!float 70e-13
+            message: Capacitance is too low. Check if there is a good contact.
+      measurements_kwargs:
+        int_time: MED
