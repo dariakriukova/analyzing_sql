@@ -1,41 +1,17 @@
 import pprint
-import re
 from time import sleep
-from typing import Sequence
 
 import click
 import numpy as np
-from jsonpath_ng import parse
 from pyvisa.resources import GPIBInstrument
 from scipy.optimize import curve_fit
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session
 from yoctopuce.yocto_temperature import YAPI, YRefParam, YTemperature
 
-from orm import IVMeasurement, Wafer, Chip
-from utils import logger
-
-
-def validate_chip_names(ctx, param, chip_names: Sequence[str]):
-    chip_types = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'U', 'V', 'X', 'Y']
-    matcher = re.compile(rf'^[{"".join(chip_types)}]\d{{4}}$')
-    valid_chip_names = []
-    for chip_name in map(lambda name: name.upper(), chip_names):
-        if not matcher.match(chip_name):
-            raise click.BadParameter(
-                f'{chip_name} is not valid chip name. It must be in format LXXXX where L is a letter ({", ".join(chip_types)}) and XXXX is a number.')
-        valid_chip_names.append(chip_name)
-    return valid_chip_names
-
-
-def validate_wafer_name(ctx, param, wafer_name: str):
-    wafer_name = wafer_name.upper()
-    if wafer_name == 'TEST':
-        return wafer_name
-    matcher = re.compile(r'^\w{2,3}\d{1,2}(-\w\d{4})?$')
-    if not matcher.match(wafer_name):
-        raise click.BadParameter(
-            f'{wafer_name} is not valid wafer name. It must be in format LL[L]X[X][-LXXXX] where L is a letter and X is a number.')
-    return wafer_name
+from orm import IVMeasurement
+from utils import logger, validate_chip_names, validate_wafer_name
+from .common import set_configs, get_or_create_chips, get_raw_measurements, \
+    validate_raw_measurements
 
 
 @click.command(name='iv', help='Measure IV data of the current chip.')
@@ -58,29 +34,15 @@ def iv(ctx: click.Context, chip_names: list[str], wafer_name: str, chip_state_id
     else:
         temperature = get_temperature(configs['instruments']['temperature_resource'])
 
-    wafer = session.query(Wafer).filter(Wafer.name == wafer_name) \
-        .options(joinedload(Wafer.chips)).one_or_none()
-
     if len(configs['chips']) != len(chip_names):
         if len(chip_names) > 0:
             logger.warning(
                 f"Number of chip names does not match number of chips in config file. {len(configs['chips'])} chip names expected")
         for i in range(len(configs['chips']) - len(chip_names)):
             chip_name = click.prompt(f"Input chip name {i + 1}", type=str)
-
             chip_names.extend(validate_chip_names(ctx, ..., [chip_name]))
 
-    if wafer is None:
-        chips = [Chip(name=chip_name) for chip_name in chip_names]
-        wafer = Wafer(name=wafer_name, chips=chips)
-    else:
-        existing_chip_names = [chip.name for chip in wafer.chips]
-        new_chips = [Chip(name=chip_name) for chip_name in chip_names if
-                     chip_name not in existing_chip_names]
-        wafer.chips.extend(new_chips)
-
-    session.add(wafer)
-    session.commit()
+    chips_dict = get_or_create_chips(session, wafer_name, chip_names)
 
     for measurement_config in configs['measurements']:
         logger.info(f'Executing measurement {measurement_config["name"]}')
@@ -100,7 +62,7 @@ def iv(ctx: click.Context, chip_names: list[str], wafer_name: str, chip_state_id
                 click.confirm("Do you want to save these measurements?", abort=True, default=True)
 
         for chip_name, chip_config in zip(chip_names, configs['chips'], strict=True):
-            chip_id = next(chip.id for chip in wafer.chips if chip.name == chip_name)
+            chip_id = chips_dict[chip_name].id
             measurements_kwargs = dict(
                 chip_state_id=int(chip_state_id),
                 chip_id=chip_id,
@@ -111,55 +73,6 @@ def iv(ctx: click.Context, chip_names: list[str], wafer_name: str, chip_state_id
             session.add_all(measurements)
     session.commit()
     logger.info('Measurements saved')
-
-
-def execute_command(instrument: GPIBInstrument, command: str, command_type: str):
-    if command_type == 'query':
-        return instrument.query(command)
-    elif command_type == 'write':
-        return instrument.write(command)
-    elif command_type == 'query_ascii_values':
-        return list(instrument.query_ascii_values(command))
-    elif command_type == 'query_csv_values':
-        return [float(value) for value in instrument.query(command).split(',')]
-    else:
-        raise ValueError(f'Invalid command type {command_type}')
-
-
-def set_configs(instrument: GPIBInstrument, commands: list[str]):
-    for command in commands:
-        instrument.write(command)
-
-
-def get_raw_measurements(instrument: GPIBInstrument, commands: dict) -> dict[str, list]:
-    measurements: dict[str, list] = dict()
-    for command in commands:
-        value = execute_command(instrument, command['command'], command['type'])
-        if 'name' in command:
-            measurements[command['name']] = value
-    return measurements
-
-
-def validate_raw_measurements(measurements: dict[str, list],
-                              configs: dict[str, dict[dict]]) -> bool:
-    for value_name, config in configs.items():
-        for validator_name, rules in config.items():
-            path = parse(value_name)
-            for ctx in path.find(measurements):
-                value = ctx.value
-                if rules.get('abs'):
-                    value = abs(value)
-                if validator_name == 'min':
-                    if value < rules['value']:
-                        logger.warning(rules['message'])
-                        return False
-                elif validator_name == 'max':
-                    if value > rules['value']:
-                        logger.warning(rules['message'])
-                        return False
-                else:
-                    raise ValueError(f'Unknown validator {validator_name}')
-    return True
 
 
 def create_measurements(raw_measurements: dict[str, list], temperature: float, chip_config: dict,

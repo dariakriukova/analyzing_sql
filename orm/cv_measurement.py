@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, Float, VARCHAR, DECIMAL, ForeignKey, DATETIME, FetchedValue
+from sqlalchemy import Column, Integer, Float, DECIMAL, ForeignKey, DATETIME, FetchedValue
 from sqlalchemy.orm import relationship
 
 from .base import Base
@@ -17,4 +17,5 @@ class CVMeasurement(Base):
     datetime = Column(DATETIME, server_default=FetchedValue())
 
     def __repr__(self):
-        return "<CVMeasurement(chip='%s', id='%d')>" % (self.chip, self.id)
+        return "<CVMeasurement(id='%d', chip='%s', capacitance='%.3e')>" % (
+        self.id, self.chip, self.capacitance)
