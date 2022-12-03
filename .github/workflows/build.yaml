@@ -16,7 +16,7 @@ jobs:
           cache: 'pipenv'
 
       - run: pip install pipenv
-      - run: pipenv install --dev --deploy
+      - run: pipenv install --dev
       - name: Test measure.py
         env:
           DB_URL: ${{ secrets.DB_URL }}
