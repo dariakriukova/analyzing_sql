@@ -1,0 +1,38 @@
+on:
+  push:
+
+
+name: Build
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+        with:
+          python-version: '3.10'
+          cache: 'pipenv'
+
+      - run: pip install pipenv
+      - run: pipenv install --dev --deploy
+      - name: Test measure.py
+        env:
+          DB_URL: ${{ secrets.DB_URL }}
+        run: |
+          ./measure.py --db-url="$env:DB_URL" --config measure/box.yaml --simulate --dry-run iv -w TEST -s 1 -n X1023 -n X1024 -n X1022 --auto
+          ./measure.py --db-url="$env:DB_URL" --config measure/single-innopoli.yaml --simulate --dry-run iv -w TEST -s 1 -n X1023 --auto
+          ./measure.py --db-url="$env:DB_URL" --config measure/single-micronova.yaml --simulate --dry-run iv -w TEST -s 1 -n X1023 --auto
+          ./measure.py --db-url="$env:DB_URL" --config measure/cv-innopoli.yaml --simulate --dry-run cv -w TEST -s 1 -n X1023 --auto
+      - run: pipenv run pyinstaller analyzing.py
+        id: pyinstaller
+      - name: Test analyzing.exe
+        env:
+          DB_URL: ${{ secrets.DB_URL }}
+        run: |
+          ./dist/analyzing/analyzing.exe --db-url="$env:DB_URL" summary-iv -w TEST
+          ./dist/analyzing/analyzing.exe --db-url="$env:DB_URL" summary-cv -w TEST
+          ./dist/analyzing/analyzing.exe --db-url="$env:DB_URL" compare-wafers -w TEST
+          ./dist/analyzing/analyzing.exe --db-url="$env:DB_URL" show wafers
+          ./dist/analyzing/analyzing.exe --db-url="$env:DB_URL" show chips
