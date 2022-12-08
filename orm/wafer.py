@@ -9,7 +9,7 @@ class Wafer(Base):
     __tablename__ = 'wafer'
 
     id = Column(INTEGER, primary_key=True, nullable=False)
-    name = Column(VARCHAR(length=20), nullable=False)
+    name = Column(VARCHAR(length=20), nullable=False, unique=True)
     chips = relationship("Chip", back_populates='wafer')
     record_created_at = Column(DATETIME, server_default=func.current_timestamp(), nullable=False)
     batch_id = Column(VARCHAR(length=10))
