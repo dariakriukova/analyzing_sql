@@ -1,5 +1,5 @@
 import pandas as pd
-from sqlalchemy import Column, Integer, CHAR, VARCHAR, ForeignKey, FetchedValue
+from sqlalchemy import Column, Integer, CHAR, VARCHAR, ForeignKey, Computed
 from sqlalchemy.orm import relationship
 
 from .base import Base
@@ -20,8 +20,8 @@ class Chip(Base):
     id = Column(Integer, primary_key=True, nullable=False)
     wafer_id = Column(Integer, ForeignKey('wafer.id'))
     wafer = relationship("Wafer", back_populates='chips')
-    name = Column(VARCHAR(length=20))
-    type = Column(CHAR(length=1), server_default=FetchedValue())
+    name = Column(VARCHAR(length=20), nullable=False)
+    type = Column(CHAR(length=1), Computed("'(SUBSTR(`name`,1,1))'", persisted=False))
     iv_measurements = relationship("IVMeasurement", back_populates='chip')
     cv_measurements = relationship("CVMeasurement", back_populates='chip')
 
