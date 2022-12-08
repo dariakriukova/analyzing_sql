@@ -19,6 +19,7 @@ sentry-sdk = "*"
 sqlalchemy = "==1.4.39"
 yoctopuce = "*"
 ipython = "*"
+alembic = "*"
 
 [dev-packages]
 colorama = { version = "*", sys_platform = "== 'win32'" }

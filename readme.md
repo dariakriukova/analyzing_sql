@@ -15,7 +15,7 @@
 2. Install PipEnv python module
    `pip install --user pipenv`
 3. Clone this repository
-   `git clone https://github.com/dariakriukova/analyzing_sql.git`[]()
+   `git clone https://github.com/dariakriukova/analyzing_sql.git`
 4. Navigate to the project directory
    `cd analyzing_sql`
 5. Install python dependencies
@@ -62,4 +62,4 @@ Commands:
 
 ### TODO
 
-- [ ] Add database migrations
+- [ ] Add instrument to configs and measurement relations
