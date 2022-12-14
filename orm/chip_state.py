@@ -11,4 +11,4 @@ class ChipState(Base):
                   comment="Chip state is used to indicate the state of corresponding chip during measurement (iv_data)")
 
     def __repr__(self):
-        return "<ChipState(name='%s', id='%d')>" % (self.name, self.id)
+        return f"<ChipState(id={self.id}, name='{self.name}')>"
