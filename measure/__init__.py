@@ -1,5 +1,5 @@
 import logging
-import sys
+import os
 from typing import Union
 
 import click
@@ -40,7 +40,7 @@ def measure(ctx: click.Context, config_path: str, log_level: str, db_url: Union[
     }
 
     try:
-        if db_url is None:
+        if db_url is None and not os.environ.get('DEV', False):
             db_url = get_db_url(username=keyring.get_password("ELFYS_DB", "USER"),
                                 password=keyring.get_password("ELFYS_DB", "PASSWORD"))
         engine = create_engine(db_url,
@@ -56,7 +56,7 @@ def measure(ctx: click.Context, config_path: str, log_level: str, db_url: Union[
         else:
             logger.error(f"Error connecting to database: {e}")
             sentry_sdk.capture_exception(e)
-        sys.exit()
+        ctx.exit()
 
     active_command = measure.commands[ctx.invoked_subcommand]
     chip_state_option = next((o for o in active_command.params if o.name == 'chip_state_id'))
@@ -79,6 +79,6 @@ def measure(ctx: click.Context, config_path: str, log_level: str, db_url: Union[
         ctx.with_resource(instrument)
     except Error as e:
         logger.error(f"PYVISA error: {e}")
-        sys.exit()
+        ctx.exit()
 
     ctx.obj['instrument'] = instrument

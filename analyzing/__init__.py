@@ -1,5 +1,5 @@
 import logging
-import sys
+import os
 from typing import Union
 
 import click
@@ -30,7 +30,7 @@ def analyzing(ctx: click.Context, log_level: str, db_url: Union[str, None]):
     active_command = analyzing.commands[ctx.invoked_subcommand]
     if active_command in (summary_iv, summary_cv, show, parse_iv, parse_cv, compare_wafers):
         try:
-            if db_url is None:
+            if db_url is None and not os.environ.get('DEV', False):
                 db_url = get_db_url(username=keyring.get_password("ELFYS_DB", "USER"),
                                     password=keyring.get_password("ELFYS_DB", "PASSWORD"))
             engine = create_engine(db_url,
@@ -46,7 +46,7 @@ def analyzing(ctx: click.Context, log_level: str, db_url: Union[str, None]):
             else:
                 logger.error(f"Error connecting to database: {e}")
                 sentry_sdk.capture_exception(e)
-            sys.exit()
+            ctx.exit()
 
         if active_command in (summary_iv, summary_cv, parse_iv, parse_cv, compare_wafers):
             chip_states = session.query(ChipState).all()
