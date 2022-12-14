@@ -1,78 +1,122 @@
-import glob
-import os
 import re
 from datetime import datetime
 from io import StringIO
-from os import path
+from pathlib import Path
 from typing import Union, Generator
 
 import click
 import pandas as pd
 from sqlalchemy.orm import Session, joinedload
 
-from orm import IVMeasurement, CVMeasurement, ChipState, Wafer, Chip
-from utils import logger
+from orm import (
+    IVMeasurement,
+    CVMeasurement,
+    ChipState,
+    Wafer,
+    Chip,
+    Instrument,
+    EqeConditions,
+    EqeMeasurement,
+    EqeSession,
+    Carrier
+)
+from utils import logger, validate_wafer_name, remember_choice, validate_files_glob
 
 
 @click.command(name='parse-iv', help="Parse .dat files with IV measurements and save to database")
 @click.pass_context
-@click.argument('path_or_glob', type=click.Path(dir_okay=False), default="./*.dat")
-def parse_iv(ctx: click.Context, path_or_glob: str):
+@click.argument('file_paths', default="./*.dat", callback=validate_files_glob)
+def parse_iv(ctx: click.Context, file_paths: tuple[Path]):
     session = ctx.obj['session']
-    chip_states = ctx.obj['chip_states']
-
-    file_paths = [path_or_glob] if path.isfile(path_or_glob) else glob.iglob(path_or_glob)
     for file_path in file_paths:
-        wafer, chip = ask_chip_and_wafer(file_path, session)
-        chip_state = ask_chip_state(chip_states)
-        data = parse_file(file_path)
-        measurements = create_iv_measurements(data['data'], data['timestamp'], chip, chip_state)
-        session.add_all(measurements)
-        session.commit()
-        new_file_name = f'{file_path}.parsed'
-        os.rename(file_path, new_file_name)
-        logger.info(f"{file_path} was renamed to {new_file_name} and saved to database")
+        print_filename_title(file_path)
+
+        try:
+            wafer, chip = guess_chip_and_wafer(file_path.name, 'iv', session)
+            chip_state = ask_chip_state(session)
+            data = parse_epg_dat_file(file_path)
+            measurements = create_iv_measurements(data['data'], data['timestamp'], chip, chip_state)
+            session.add_all(measurements)
+            session.commit()
+            mark_file_as_parsed(file_path)
+        except click.Abort:
+            logger.info(f"Skipping file...")
+            session.rollback()
+        except Exception as e:
+            logger.exception(f"Could not parse file {file_path} due to error: {e}")
+            session.rollback()
 
 
 @click.command(name='parse-cv', help="Parse .dat files with CV measurements and save to database")
 @click.pass_context
-@click.argument('path_or_glob', type=click.Path(dir_okay=False), default="./*.dat")
-def parse_cv(ctx: click.Context, path_or_glob: str, *argc, **kwarg):
+@click.argument('file_paths', default="./*.dat", callback=validate_files_glob)
+def parse_cv(ctx: click.Context, file_paths: tuple[Path]):
     session = ctx.obj['session']
-    chip_states = ctx.obj['chip_states']
-
-    file_paths = [path_or_glob] if path.isfile(path_or_glob) else glob.iglob(path_or_glob)
     for file_path in file_paths:
-        wafer, chip = ask_chip_and_wafer(file_path, session)
-        chip_state = ask_chip_state(chip_states)
-        data = parse_file(file_path)
-        measurements = create_cv_measurements(data['data'], data['timestamp'], chip, chip_state)
-        session.add_all(measurements)
-        session.commit()
-        new_file_name = f'{file_path}.parsed'
-        os.rename(file_path, new_file_name)
-        logger.info(f"{file_path} was renamed to {new_file_name} and saved to database")
+        print_filename_title(file_path)
+        try:
+            wafer, chip = guess_chip_and_wafer(file_path.name, 'cv', session)
+            chip_state = ask_chip_state(session)
+            data = parse_epg_dat_file(file_path)
+            measurements = create_cv_measurements(data['data'], data['timestamp'], chip, chip_state)
+            session.add_all(measurements)
+            session.commit()
+            mark_file_as_parsed(file_path)
+        except click.Abort:
+            logger.info(f"Skipping file...")
+            session.rollback()
+        except Exception as e:
+            logger.exception(f"Could not parse file {file_path} due to error: {e}")
+            session.rollback()
 
 
-def ask_chip_and_wafer(file_path: str, session: Session) -> (Wafer, Chip):
-    matcher = re.compile(r'^(IV|CV)\s+(?P<wafer>[\w\d]+)\s+(?P<chip>[\w\d]+)\..*$')
-    filename = path.basename(file_path)
+@click.command(name='parse-eqe', help="Parse files with EQE measurements and save to database")
+@click.pass_context
+@click.argument('file_paths', default="./*.dat", callback=validate_files_glob)
+def parse_eqe(ctx: click.Context, file_paths: tuple[Path]):
+    session: Session = ctx.obj['session']
+    instrument_map: dict[str, Instrument] = {i.name: i for i in session.query(Instrument).all()}
+
+    for file_path in file_paths:
+        print_filename_title(file_path)
+        try:
+            data = parse_eqe_dat_file(file_path)
+            conditions = create_eqe_conditions(
+                data['conditions'], instrument_map, file_path, session)
+            measurements = create_eqe_measurements(data['data'], conditions)
+            wafer, chip = guess_chip_and_wafer(file_path.name, 'eqe', session)
+            conditions.wafer = wafer
+            conditions.chip = chip
+            conditions.chip_state = ask_chip_state(session)
+            conditions.carrier = ask_carrier(session)
+            conditions.session = ask_session(conditions.datetime, session)
+
+            session.add(conditions)
+            session.add_all(measurements)
+            session.commit()
+            mark_file_as_parsed(file_path)
+        except click.Abort:
+            session.rollback()
+            logger.info(f"Skipping file...")
+        except Exception as e:
+            logger.exception(f"Could not parse file {file_path} due to error: {e}")
+            session.rollback()
+
+
+def guess_chip_and_wafer(filename: str, prefix: str, session: Session) -> tuple[Chip, Wafer]:
+    matcher = re.compile(rf'^{prefix}\s+(?P<wafer>[\w\d]+)\s+(?P<chip>[\w\d-]+)(\s.*)?\..*$', re.I)
     match = matcher.match(filename)
+
     if match is None:
-        logger.warn(f"Could not guess chip and wafer from filename ({filename})")
-        chip_name = click.prompt("Input chip name", type=str)
-        wafer_name = click.prompt("Input wafer name", type=str)
+        chip_name = None
+        wafer_name = None
+        logger.warn(f"Could not guess chip and wafer from filename")
     else:
-        chip_name = match.group('chip')
-        wafer_name = match.group('wafer')
-        confirm = click.confirm(
-            f"Guessed from filename ({filename}): wafer={wafer_name}, chip={chip_name}",
-            default=True)
-        if not confirm:
-            chip_name = click.prompt("Input chip name", type=str, default=chip_name,
-                                     show_default=True)
-            wafer_name = click.prompt("Input wafer name", type=str, default=wafer_name,
-                                      show_default=True)
+        chip_name = match.group('chip').upper()
+        wafer_name = match.group('wafer').upper()
+        logger.info(f"Guessed from filename: wafer={wafer_name}, chip={chip_name}")
+    wafer_name = ask_wafer_name(wafer_name)
+    chip_name = ask_chip_name(chip_name)
 
     wafer = session.query(Wafer).filter(Wafer.name == wafer_name) \
         .options(joinedload(Wafer.chips)).one_or_none()
@@ -87,33 +131,114 @@ def ask_chip_and_wafer(file_path: str, session: Session) -> (Wafer, Chip):
     return wafer, chip
 
 
-def ask_chip_state(chip_states: list[ChipState]) -> ChipState:
-    try:
-        if ask_chip_state.apply_to_all is not None:
-            return ask_chip_state.apply_to_all
-    except AttributeError:
-        ask_chip_state.apply_to_all = None
+def ask_chip_name(default: str = None) -> str:
+    chip_name = None
+    while chip_name is None:
+        chip_name = click.prompt(
+            f"Input chip name ({'leave empty to accept default, ' if default is not None else ''}'skip' to skip entirely)",
+            type=str,
+            default=default,
+            show_default=True).upper()
+        if chip_name == 'SKIP':
+            raise click.Abort()
+    return chip_name
+
+
+def ask_wafer_name(default: str = None) -> str:
+    wafer_name = None
+    while wafer_name is None:
+        wafer_name = click.prompt(
+            f"Input wafer name ({'leave empty to accept default, ' if default is not None else ''}'skip' to skip entirely)",
+            type=str,
+            default=default,
+            show_default=True).upper()
+        if wafer_name == 'SKIP':
+            raise click.Abort()
+        try:
+            wafer_name = validate_wafer_name(None, None, wafer_name)
+        except click.BadParameter as e:
+            logger.warn(e)
+            wafer_name = None
+    return wafer_name
+
+
+def ask_session(timestamp: datetime, session: Session) -> EqeSession:
+    found_eqe_sessions: list[EqeSession] = session.query(EqeSession).filter(
+        EqeSession.date == timestamp.date()).all()
+    if len(found_eqe_sessions) == 0:
+        logger.info(f"No sessions were found for measurement date {timestamp.date()}")
+        eqe_session = EqeSession(date=timestamp.date())
+        session.add(eqe_session)
+        session.flush([eqe_session])
+        logger.info(f"New eqe session was created: {eqe_session.__repr__()}")
+    elif len(found_eqe_sessions) == 1:
+        eqe_session = found_eqe_sessions.pop()
+        logger.info(f"Existing eqe session will be used: {eqe_session.__repr__()}")
+    else:
+        option_type = click.Choice([str(s.id) for s in found_eqe_sessions])
+        option_help = "\n".join([f"{s.id} - {s.__repr__()};" for s in found_eqe_sessions])
+        session_id = click.prompt(f"Chose eqe session\n{option_help}", type=option_type,
+                                  show_choices=False, prompt_suffix='\n')
+        eqe_session = next(s for s in found_eqe_sessions if str(s.id) == session_id)
+    return eqe_session
+
+
+@remember_choice("Use {} for all parsed measurements")
+def ask_carrier(session: Session) -> Carrier:
+    carriers = session.query(Carrier).order_by(Carrier.id).all()
+    option_type = click.Choice([str(c.id) for c in carriers])
+    option_help = "\n".join(["{} - {};".format(carrier.id, carrier.name) for carrier in carriers])
+    carrier_id = click.prompt(f"Select carrier\n{option_help}", type=option_type,
+                              show_choices=False, prompt_suffix='\n')
+    return next(state for state in carriers if str(state.id) == carrier_id)
+
+
+@remember_choice("Apply {} to all parsed measurements")
+def ask_chip_state(session: Session) -> ChipState:
+    chip_states = session.query(ChipState).order_by(ChipState.id).all()
     option_type = click.Choice([str(state.id) for state in chip_states])
     option_help = "\n".join(["{} - {};".format(state.id, state.name) for state in chip_states])
-    chip_state_id = click.prompt(f"Input chip state\n{option_help}", type=option_type,
+    chip_state_id = click.prompt(f"Select chip state\n{option_help}", type=option_type,
                                  show_choices=False, prompt_suffix='\n')
-    chip_state = next(state for state in chip_states if str(state.id) == chip_state_id)
-    apply_to_all = click.confirm(f"Apply chip state \"{chip_state.name}\" to all files",
-                                 default=False)
-    if apply_to_all:
-        ask_chip_state.apply_to_all = chip_state
-    return chip_state
+    return next(state for state in chip_states if str(state.id) == chip_state_id)
 
 
-def parse_file(file_path: str) -> dict[str, Union[datetime, pd.DataFrame]]:
-    with click.open_file(file_path) as file:
-        content = file.read()
+def parse_eqe_dat_file(file_path: Path) -> dict:
+    patterns = (
+        ('datetime', '^(\d{2}/\d{2}/\d{4}\s\d{2}:\d{2})$',
+         lambda m: datetime.strptime(m, '%d/%m/%Y %H:%M')),
+        ('bias', '^Bias \(V\):\s+([\d.-]+)$', float),
+        ('averaging', '^Averaging:\s+(\d+)$', int),
+        ('dark_current', '^Dark current \(A\):\s+([\d\.+-E]+)$', float),
+        ('temperature', '^Temperature \(C\):\s+([\d\.]+)$', float),
+        ('calibration_file', '^Used reference calibration file:\s+(.*)$', str),
+        ('instrument', '^Chosen SMU device:\s+(.+)$', str),
+        ('ddc', '^Sent DDC:\s+(.+)$', str),
+    )
+    conditions = {}
+    contents = file_path.read_text()
+    for prop, pattern, factory in patterns:
+        match = re.compile(pattern, re.MULTILINE).search(contents)
+        if match:
+            conditions[prop] = factory(match.group(1))
+        else:
+            conditions[prop] = None
+
+    table_matcher = re.compile(r'^.*$[\r\n](^(([\d.E+-]+|NaN)\t?){2,}$[\r\n]){2,}',
+                               re.M | re.I)
+    match = table_matcher.search(contents)
+    data = pd.read_csv(StringIO(match.group()), sep='\t').replace(float('nan'), None)
+    return {'conditions': conditions, 'data': data}
+
+
+def parse_epg_dat_file(file_path: Path) -> dict[str, Union[datetime, pd.DataFrame]]:
+    content = file_path.read_text()
 
     date_matcher = re.compile(r'^Date:\s*(?P<date>[\d/]+)\s*$', re.M | re.I)
     date_match = date_matcher.search(content)
 
     if date_match is None:
-        logger.warn(f"Could not guess date from file ({file_path})")
+        logger.warn(f"Could not guess date from file")
         date = click.prompt("Input date", type=click.DateTime(formats=['%Y-%m-%d']),
                             default=datetime.now(), show_default=True)
     else:
@@ -122,7 +247,7 @@ def parse_file(file_path: str) -> dict[str, Union[datetime, pd.DataFrame]]:
     time_matcher = re.compile(r'^Time:\s*(?P<time>[\d:]+)\s*$', re.M | re.I)
     time_match = time_matcher.search(content)
     if time_match is None:
-        logger.warn(f"Could not guess time from file ({file_path})")
+        logger.warn(f"Could not guess time from file")
         time = click.prompt("Input time", type=click.DateTime(formats=['%H:%M:%S']),
                             default=datetime.now(), show_default=True)
     else:
@@ -160,3 +285,59 @@ def create_cv_measurements(data: pd.DataFrame, timestamp: datetime, chip: Chip,
             voltage_input=row['BIAS'],
             capacitance=row['C'],
             datetime=timestamp)
+
+
+def create_eqe_measurements(data: pd.DataFrame, conditions: EqeConditions) \
+        -> Generator[EqeMeasurement, None, None]:
+    header_to_prop_map = {
+        'Wavelength (nm)': 'wavelength',
+        'EQE (%)': 'eqe',
+        'Current (A)': 'light_current',
+        'Current Light (A)': 'light_current',
+        'Current Dark (A)': 'dark_current',
+        'Standard deviation (A)': 'std',
+        'Responsivity (A/W)': 'responsivity',
+    }
+
+    for idx, row in data.iterrows():
+        yield EqeMeasurement(
+            conditions=conditions,
+            **{header_to_prop_map[header]: row[header] for header in data.columns},
+        )
+
+
+def create_eqe_conditions(
+        raw_data: dict, instrument_map: dict[str, Instrument], file_path: Path, session: Session):
+    existing = session.query(EqeConditions).filter_by(datetime=raw_data['datetime']).all()
+    if existing:
+        existing_str = "\n".join([f"{i}. {c.__repr__()}" for i, c in enumerate(existing, start=1)])
+        logger.info(
+            f"Found existing eqe measurements at {raw_data['datetime']}:\n{existing_str}")
+        click.confirm("Are you sure you want to add new measurements?", abort=True)
+    instrument = instrument_map[raw_data.pop('instrument')]
+    comment = f"Parsed file: {file_path.name}\n" + click.prompt(
+        f"Add comments for measurements",
+        default='',
+        show_default=False)
+    conditions = EqeConditions(
+        instrument=instrument,
+        comment=comment or None,
+        **raw_data,
+    )
+    return conditions
+
+
+def print_filename_title(path: Path, top_margin: int = 2, bottom_margin: int = 1):
+    if top_margin:
+        click.echo("\n" * top_margin, nl=False)
+    logger.debug(f"Processing file: {path.name}")
+    click.echo("╔" + "═" * (len(path.name) + 2) + "╗")
+    click.echo("║ " + path.name + " ║")
+    click.echo("╚" + "═" * (len(path.name) + 2) + "╝")
+    if bottom_margin:
+        click.echo("\n" * bottom_margin, nl=False)
+
+
+def mark_file_as_parsed(file_path: Path):
+    file_path = file_path.rename(file_path.with_suffix(file_path.suffix + '.parsed'))
+    logger.info(f"File was saved to database and renamed to '{file_path.name}'")
