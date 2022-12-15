@@ -23,7 +23,7 @@ from orm import (
 from utils import logger, validate_wafer_name, remember_choice, validate_files_glob
 
 
-@click.command(name='parse-iv', help="Parse .dat files with IV measurements and save to database")
+@click.command(name='parse-iv', help="Parse IV measurements")
 @click.pass_context
 @click.argument('file_paths', default="./*.dat", callback=validate_files_glob)
 def parse_iv(ctx: click.Context, file_paths: tuple[Path]):
@@ -47,7 +47,7 @@ def parse_iv(ctx: click.Context, file_paths: tuple[Path]):
             session.rollback()
 
 
-@click.command(name='parse-cv', help="Parse .dat files with CV measurements and save to database")
+@click.command(name='parse-cv', help="Parse CV measurements")
 @click.pass_context
 @click.argument('file_paths', default="./*.dat", callback=validate_files_glob)
 def parse_cv(ctx: click.Context, file_paths: tuple[Path]):
@@ -70,7 +70,7 @@ def parse_cv(ctx: click.Context, file_paths: tuple[Path]):
             session.rollback()
 
 
-@click.command(name='parse-eqe', help="Parse files with EQE measurements and save to database")
+@click.command(name='eqe', help="Parse EQE measurements")
 @click.pass_context
 @click.argument('file_paths', default="./*.dat", callback=validate_files_glob)
 def parse_eqe(ctx: click.Context, file_paths: tuple[Path]):
@@ -101,6 +101,12 @@ def parse_eqe(ctx: click.Context, file_paths: tuple[Path]):
         except Exception as e:
             logger.exception(f"Could not parse file {file_path} due to error: {e}")
             session.rollback()
+
+
+@click.group(name='parse', help="Parse files with measurements and save to database",
+             commands=[parse_iv, parse_cv, parse_eqe])
+def parse():
+    pass
 
 
 def guess_chip_and_wafer(filename: str, prefix: str, session: Session) -> tuple[Chip, Wafer]:

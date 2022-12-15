@@ -12,13 +12,13 @@ from sqlalchemy.orm import Session
 from orm import Wafer, ChipState
 from utils import logger, get_db_url, CsvChoice
 from .compare_wafers import compare_wafers
-from .parse import parse_iv, parse_cv, parse_eqe
+from .parse import parse
 from .db import db_group, set_db
 from .show import show
 from .summary import summary_iv, summary_cv
 
 
-@click.group(commands=[summary_iv, summary_cv, db_group, show, parse_cv, parse_iv, parse_eqe, compare_wafers])
+@click.group(commands=[summary_iv, summary_cv, db_group, show, parse, compare_wafers])
 @click.pass_context
 @click.option("--log-level", default="INFO", help="Log level.", show_default=True,
               type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],

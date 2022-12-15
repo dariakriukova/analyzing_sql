@@ -52,9 +52,8 @@ Options:
 
 Commands:
   compare-wafers  Compare wafers
-  parse-cv        Parse .dat files with CV measurements and save to database
-  parse-iv        Parse .dat files with IV measurements and save to database
-  set-db          Set database credentials.
+  db              Set of commands to manage related database
+  parse           Parse files with measurements and save to database
   show            Show data from database
   summary-cv      Make summary (png and xlsx) for CV measurements' data.
   summary-iv      Make summary (png and xlsx) for IV measurements' data.
