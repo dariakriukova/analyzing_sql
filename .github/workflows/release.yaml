@@ -18,7 +18,7 @@ jobs:
           cache: 'pipenv'
 
       - run: pip install pipenv
-      - run: pipenv install --dev
+      - run: pipenv install --dev  --deploy
       - run: pipenv run pyinstaller analyzing.py
         id: pyinstaller
       - env:
