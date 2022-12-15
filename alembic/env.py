@@ -1,15 +1,13 @@
 import logging
-import subprocess
 import sys
-import time
 from logging.config import fileConfig
 
 import click
-import keyring
 from alembic import context
 from sqlalchemy import create_engine, engine_from_config
+from sqlalchemy.engine import URL
 
-from utils import get_db_url
+from analyzing.db import dump_db
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -23,42 +21,6 @@ if config.config_file_name is not None:
 from orm import Base
 
 target_metadata = Base.metadata
-
-
-def save_dump(url, logger: logging.Logger) -> None:
-    logger.info("Saving database dump... This may take a while.")
-
-    filename = time.strftime('dump-%Y-%m-%d-%I.sql.gz')
-
-    mysqldump = subprocess.Popen(
-        f'docker run --rm mysql:latest \
-        mysqldump --no-tablespaces --host={url.host} --port={url.port} \
-        --user={url.username} --password={url.password} {url.database}',
-        shell=True, text=True,
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE)
-    mysqldump.stdin.write(url.password)
-    gzip = subprocess.Popen(f'gzip -9 > {filename}', shell=True, text=True,
-                            stdin=mysqldump.stdout,
-                            stderr=subprocess.PIPE)
-
-    mysqldump.wait()
-    output, error = mysqldump.communicate()
-    if error:
-        logger.warning(error)
-    if mysqldump.returncode != 0:
-        logger.error(f'Error while dumping database')
-        sys.exit(mysqldump.returncode)
-
-    output, error = gzip.communicate()
-    if error:
-        logger.warning(error)
-    if gzip.returncode != 0:
-        logger.error(f'Error while compressing dump')
-        sys.exit(gzip.returncode)
-
-    logger.info(f"Database dumped to {filename}")
 
 
 def run_migrations_offline() -> None:
@@ -96,10 +58,10 @@ def run_migrations_online() -> None:
         logger = logging.getLogger("alembic.runtime.migration")
         logger.warning("Running migrations in production mode.")
         click.confirm('Do you want to continue?', abort=True)
-        db_url = get_db_url(username=keyring.get_password("ELFYS_DB", "USER"),
-                            password=keyring.get_password("ELFYS_DB", "PASSWORD"))
-        engine = create_engine(db_url)
-        save_dump(engine.url, logger)
+        db_url_or_error_code = dump_db(args=[], windows_expand_args=False, standalone_mode=False)
+        if not isinstance(db_url_or_error_code, URL):
+            sys.exit(db_url_or_error_code)
+        engine = create_engine(db_url_or_error_code)
     else:
         engine = engine_from_config(
             config.get_section(config.config_ini_section),
