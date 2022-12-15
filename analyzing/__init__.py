@@ -13,12 +13,12 @@ from orm import Wafer, ChipState
 from utils import logger, get_db_url, CsvChoice
 from .compare_wafers import compare_wafers
 from .parse import parse_iv, parse_cv, parse_eqe
-from .set_db import set_db
+from .db import db_group, set_db
 from .show import show
 from .summary import summary_iv, summary_cv
 
 
-@click.group(commands=[summary_iv, summary_cv, set_db, show, parse_cv, parse_iv, parse_eqe, compare_wafers])
+@click.group(commands=[summary_iv, summary_cv, db_group, show, parse_cv, parse_iv, parse_eqe, compare_wafers])
 @click.pass_context
 @click.option("--log-level", default="INFO", help="Log level.", show_default=True,
               type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
@@ -28,7 +28,7 @@ def analyzing(ctx: click.Context, log_level: str, db_url: Union[str, None]):
     logger.setLevel(log_level)
     ctx.obj = dict()
     active_command = analyzing.commands[ctx.invoked_subcommand]
-    if active_command in (summary_iv, summary_cv, show, parse_iv, parse_cv, parse_eqe, compare_wafers):
+    if active_command is not db_group:
         try:
             if db_url is None and not os.environ.get('DEV', False):
                 db_url = get_db_url(username=keyring.get_password("ELFYS_DB", "USER"),
