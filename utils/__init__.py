@@ -6,3 +6,4 @@ from .logger import logger
 from .thresholds import iv_thresholds, cv_thresholds
 from .validators import *
 from .voltages_option import VoltagesOption, IV_VOLTAGE_PRESETS
+from .functions import *

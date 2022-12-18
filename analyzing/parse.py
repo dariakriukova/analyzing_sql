@@ -20,10 +20,10 @@ from orm import (
     EqeSession,
     Carrier
 )
-from utils import logger, validate_wafer_name, remember_choice, validate_files_glob
+from utils import logger, validate_wafer_name, remember_choice, validate_files_glob, select_one
 
 
-@click.command(name='parse-iv', help="Parse IV measurements")
+@click.command(name='iv', help="Parse IV measurements")
 @click.pass_context
 @click.argument('file_paths', default="./*.dat", callback=validate_files_glob)
 def parse_iv(ctx: click.Context, file_paths: tuple[Path]):
@@ -47,7 +47,7 @@ def parse_iv(ctx: click.Context, file_paths: tuple[Path]):
             session.rollback()
 
 
-@click.command(name='parse-cv', help="Parse CV measurements")
+@click.command(name='cv', help="Parse CV measurements")
 @click.pass_context
 @click.argument('file_paths', default="./*.dat", callback=validate_files_glob)
 def parse_cv(ctx: click.Context, file_paths: tuple[Path]):
@@ -181,32 +181,22 @@ def ask_session(timestamp: datetime, session: Session) -> EqeSession:
         eqe_session = found_eqe_sessions.pop()
         logger.info(f"Existing eqe session will be used: {eqe_session.__repr__()}")
     else:
-        option_type = click.Choice([str(s.id) for s in found_eqe_sessions])
-        option_help = "\n".join([f"{s.id} - {s.__repr__()};" for s in found_eqe_sessions])
-        session_id = click.prompt(f"Chose eqe session\n{option_help}", type=option_type,
-                                  show_choices=False, prompt_suffix='\n')
-        eqe_session = next(s for s in found_eqe_sessions if str(s.id) == session_id)
+        eqe_session = select_one(found_eqe_sessions, "Select eqe session", lambda s: (s.id, s.date))
     return eqe_session
 
 
 @remember_choice("Use {} for all parsed measurements")
 def ask_carrier(session: Session) -> Carrier:
     carriers = session.query(Carrier).order_by(Carrier.id).all()
-    option_type = click.Choice([str(c.id) for c in carriers])
-    option_help = "\n".join(["{} - {};".format(carrier.id, carrier.name) for carrier in carriers])
-    carrier_id = click.prompt(f"Select carrier\n{option_help}", type=option_type,
-                              show_choices=False, prompt_suffix='\n')
-    return next(state for state in carriers if str(state.id) == carrier_id)
+    carrier = select_one(carriers, "Select carrier")
+    return carrier
 
 
 @remember_choice("Apply {} to all parsed measurements")
 def ask_chip_state(session: Session) -> ChipState:
     chip_states = session.query(ChipState).order_by(ChipState.id).all()
-    option_type = click.Choice([str(state.id) for state in chip_states])
-    option_help = "\n".join(["{} - {};".format(state.id, state.name) for state in chip_states])
-    chip_state_id = click.prompt(f"Select chip state\n{option_help}", type=option_type,
-                                 show_choices=False, prompt_suffix='\n')
-    return next(state for state in chip_states if str(state.id) == chip_state_id)
+    chip_state = select_one(chip_states, "Select chip state")
+    return chip_state
 
 
 def parse_eqe_dat_file(file_path: Path) -> dict:
@@ -220,6 +210,9 @@ def parse_eqe_dat_file(file_path: Path) -> dict:
         ('calibration_file', '^Used reference calibration file:\s+(.*)$', str),
         ('instrument', '^Chosen SMU device:\s+(.+)$', str),
         ('ddc', '^Sent DDC:\s+(.+)$', str),
+        ###### LEGACY ###### FIXME: remove later
+        ('datetime', '^(\d{2}/\d{2}/\d{4}\s\d{2}\.\d{2})$',  # FOR OLD FILES WITH WRONG DATE FORMAT
+         lambda m: datetime.strptime(m, '%d/%m/%Y %H.%M')),
     )
     conditions = {}
     contents = file_path.read_text()
@@ -227,8 +220,6 @@ def parse_eqe_dat_file(file_path: Path) -> dict:
         match = re.compile(pattern, re.MULTILINE).search(contents)
         if match:
             conditions[prop] = factory(match.group(1))
-        else:
-            conditions[prop] = None
 
     table_matcher = re.compile(r'^.*$[\r\n](^(([\d.E+-]+|NaN)\t?){2,}$[\r\n]){2,}',
                                re.M | re.I)
@@ -320,7 +311,10 @@ def create_eqe_conditions(
         logger.info(
             f"Found existing eqe measurements at {raw_data['datetime']}:\n{existing_str}")
         click.confirm("Are you sure you want to add new measurements?", abort=True)
-    instrument = instrument_map[raw_data.pop('instrument')]
+    instrument = instrument_map.get(raw_data.pop('instrument'), None)
+    if instrument is None:
+        logger.warn(f"Could not find instrument in provided file")
+        instrument = select_one(list(instrument_map.values()), "Select instrument")
     comment = f"Parsed file: {file_path.name}\n" + click.prompt(
         f"Add comments for measurements",
         default='',
