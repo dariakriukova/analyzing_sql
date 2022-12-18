@@ -9,13 +9,15 @@ from sqlalchemy import create_engine, desc
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
-from orm import Wafer, ChipState
+from orm import Wafer, ChipState, ClientVersion
 from utils import logger, get_db_url, CsvChoice
 from .compare_wafers import compare_wafers
-from .parse import parse
 from .db import db_group, set_db
+from .parse import parse
 from .show import show
 from .summary import summary_iv, summary_cv
+
+VERSION = '0.16'
 
 
 @click.group(commands=[summary_iv, summary_cv, db_group, show, parse, compare_wafers])
@@ -35,9 +37,12 @@ def analyzing(ctx: click.Context, log_level: str, db_url: Union[str, None]):
                                     password=keyring.get_password("ELFYS_DB", "PASSWORD"))
             engine = create_engine(db_url,
                                    echo="debug" if logger.getEffectiveLevel() == logging.DEBUG else False)
-            engine.connect()
             session = ctx.with_resource(Session(bind=engine, autoflush=False, autocommit=False))
             ctx.obj['session'] = session
+            latest = session.query(ClientVersion).one()
+            if latest != ClientVersion(version=VERSION):
+                logger.warning(
+                    f"Your analyzing version seems outdated. Your version {VERSION}, latest available version {latest.version}. Consider upgrading.")
         except OperationalError as e:
             if 'Access denied' in str(e):
                 logger.warn(
@@ -50,7 +55,8 @@ def analyzing(ctx: click.Context, log_level: str, db_url: Union[str, None]):
         if active_command in (summary_iv, summary_cv, compare_wafers):
             chip_states = session.query(ChipState).all()
             ctx.obj['chip_states'] = chip_states
-            chip_state_option = next((o for o in active_command.params if o.name == 'chip_state_ids'))
+            chip_state_option = next(
+                (o for o in active_command.params if o.name == 'chip_state_ids'))
             chip_state_option.type = CsvChoice(
                 [str(state.id) for state in chip_states] + chip_state_option.default)
             chip_state_option.help = chip_state_option.help + "\n\n\b\n" + "\n".join(

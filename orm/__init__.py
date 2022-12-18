@@ -2,6 +2,7 @@ from .base import Base
 from .carrier import Carrier
 from .chip import Chip
 from .chip_state import ChipState
+from .client_version import ClientVersion
 from .cv_measurement import CVMeasurement
 from .eqe_conditions import EqeConditions
 from .eqe_measurement import EqeMeasurement
