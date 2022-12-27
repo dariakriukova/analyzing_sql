@@ -102,6 +102,7 @@ measurements:
       validation:
         anode_current[-1]:
           min:
+            abs: true
             value: !!float 5e-3
             message: Current leakage is too low. Check if there is a good contact.
       measurements_kwargs:

@@ -1,5 +1,5 @@
 import logging
-import sys
+import os
 from typing import Union
 
 import click
@@ -15,9 +15,10 @@ from sqlalchemy.orm import Session
 from orm import ChipState
 from utils import logger, get_db_url
 from .iv import iv
+from .cv import cv
 
 
-@click.group(commands=[iv])
+@click.group(commands=[iv, cv])
 @click.pass_context
 @click.option("-c", "--config", "config_path", required=True, type=click.Path(exists=True),
               help="Path to config file. See ./measure/configs/*.yaml")
@@ -39,7 +40,7 @@ def measure(ctx: click.Context, config_path: str, log_level: str, db_url: Union[
     }
 
     try:
-        if db_url is None:
+        if db_url is None and not os.environ.get('DEV', False):
             db_url = get_db_url(username=keyring.get_password("ELFYS_DB", "USER"),
                                 password=keyring.get_password("ELFYS_DB", "PASSWORD"))
         engine = create_engine(db_url,
@@ -55,9 +56,10 @@ def measure(ctx: click.Context, config_path: str, log_level: str, db_url: Union[
         else:
             logger.error(f"Error connecting to database: {e}")
             sentry_sdk.capture_exception(e)
-        sys.exit()
+        ctx.exit()
 
-    chip_state_option = next((o for o in iv.params if o.name == 'chip_state_id'))
+    active_command = measure.commands[ctx.invoked_subcommand]
+    chip_state_option = next((o for o in active_command.params if o.name == 'chip_state_id'))
     chip_state_option.type = click.Choice([str(state.id) for state in chip_states])
     chip_state_option.help = chip_state_option.help + "\n\n" + "\n".join(
         ["{} - {};".format(state.id, state.name) for state in chip_states])
@@ -77,6 +79,6 @@ def measure(ctx: click.Context, config_path: str, log_level: str, db_url: Union[
         ctx.with_resource(instrument)
     except Error as e:
         logger.error(f"PYVISA error: {e}")
-        sys.exit()
+        ctx.exit()
 
     ctx.obj['instrument'] = instrument

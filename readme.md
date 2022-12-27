@@ -15,7 +15,7 @@
 2. Install PipEnv python module
    `pip install --user pipenv`
 3. Clone this repository
-   `git clone https://github.com/dariakriukova/analyzing_sql.git`[]()
+   `git clone https://github.com/dariakriukova/analyzing_sql.git`
 4. Navigate to the project directory
    `cd analyzing_sql`
 5. Install python dependencies
@@ -52,9 +52,8 @@ Options:
 
 Commands:
   compare-wafers  Compare wafers
-  parse-cv        Parse .dat files with CV measurements and save to database
-  parse-iv        Parse .dat files with IV measurements and save to database
-  set-db          Set database credentials.
+  db              Set of commands to manage related database
+  parse           Parse files with measurements and save to database
   show            Show data from database
   summary-cv      Make summary (png and xlsx) for CV measurements' data.
   summary-iv      Make summary (png and xlsx) for IV measurements' data.
@@ -62,4 +61,4 @@ Commands:
 
 ### TODO
 
-- [ ] Add database migrations
+- [ ] Add instrument to configs and measurement relations
