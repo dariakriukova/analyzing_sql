@@ -251,12 +251,15 @@ def parse_epg_dat_file(file_path: Path) -> dict[str, Union[datetime, pd.DataFram
         time = datetime.strptime(time_match.group('time'), '%H:%M:%S')
 
     timestamp = datetime.combine(date, datetime.time(time))
-    table_matcher = re.compile(r'^(?P<table>([\w]{1,10}\s?){4}$\n[\s\d.E+-]*?)[\n\r]{2}',
+    table_matcher = re.compile(r'^(?P<table>([\w]{1,10}\t?){3,5}$\n[\s\d.E+-]*?)[\n\r]{2}',
                                re.M | re.I)
     data = pd.DataFrame()
     for match in table_matcher.finditer(content):
         data = pd.concat([data, pd.read_csv(StringIO(match.group('table')), sep='\t')], copy=False)
 
+    if data.empty:
+        logger.warn("No data was found in given file. Does it use the unusual format?")
+        raise click.Abort()
     return {'timestamp': timestamp, 'data': data}
 
 
