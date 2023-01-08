@@ -26,7 +26,7 @@ LOGO = """
 \b ╚═╝  ╚═╝ ╚═╝  ╚═══╝ ╚═╝  ╚═╝ ╚══════╝ ╚═╝    ╚══════╝ ╚══════╝ ╚═╝  ╚═╝
 """
 
-VERSION = '0.16'
+VERSION = '0.17'
 
 
 @click.group(commands=[summary_group, db_group, show, parse, compare_wafers],
