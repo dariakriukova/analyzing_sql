@@ -135,6 +135,7 @@ def summary_cv(ctx: click.Context, chips_type: Union[str, None], wafer_name: str
         .filter(CVMeasurement.chip.has(Chip.wafer.__eq__(wafer))) \
         .options(joinedload(CVMeasurement.chip))
 
+    # TODO: use EntityChoice with default=ALL instead
     if chips_type is not None:
         query = query.filter(CVMeasurement.chip.has(Chip.type.__eq__(chips_type)))
     else:

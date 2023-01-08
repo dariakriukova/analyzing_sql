@@ -24,6 +24,8 @@ class EntityChoice(Choice):
 
     def convert(self, value: str, param: t.Optional[Parameter], ctx: t.Optional[Context]) -> t.Any:
         if self.multiple:
+            if value.upper() == 'ALL':
+                return self.choices
             return tuple(super(EntityChoice, self).convert(x, param, ctx) for x in value.split(','))
         else:
             return super(EntityChoice, self).convert(value, param, ctx)
