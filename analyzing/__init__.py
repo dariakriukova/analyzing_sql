@@ -17,14 +17,23 @@ from .parse import parse
 from .show import show
 from .summary import summary_iv, summary_cv
 
+LOGO = """
+\b  █████╗  ███╗   ██╗  █████╗  ██╗   ██╗   ██╗ ███████╗ ███████╗ ██████╗
+\b ██╔══██╗ ████╗  ██║ ██╔══██╗ ██║   ╚██╗ ██╔╝ ╚══███╔╝ ██╔════╝ ██╔══██╗
+\b ███████║ ██╔██╗ ██║ ███████║ ██║    ╚████╔╝    ███╔╝  █████╗   ██████╔╝
+\b ██╔══██║ ██║╚██╗██║ ██╔══██║ ██║     ╚██╔╝    ███╔╝   ██╔══╝   ██╔══██╗
+\b ██║  ██║ ██║ ╚████║ ██║  ██║ ███████╗ ██║    ███████╗ ███████╗ ██║  ██║
+\b ╚═╝  ╚═╝ ╚═╝  ╚═══╝ ╚═╝  ╚═╝ ╚══════╝ ╚═╝    ╚══════╝ ╚══════╝ ╚═╝  ╚═╝
+"""
+
 VERSION = '0.16'
 
 
-@click.group(commands=[summary_iv, summary_cv, db_group, show, parse, compare_wafers])
+@click.group(commands=[summary_iv, summary_cv, db_group, show, parse, compare_wafers],
+             help=f"{LOGO}\nVersion: {VERSION}")
 @click.pass_context
 @click.option("--log-level", default="INFO", help="Log level.", show_default=True,
-              type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
-                                case_sensitive=False))
+              type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR"], case_sensitive=False))
 @click.option("--db-url", help="Database URL.")
 def analyzing(ctx: click.Context, log_level: str, db_url: Union[str, None]):
     logger.setLevel(log_level)
