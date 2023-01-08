@@ -23,7 +23,7 @@ def set_db():
         engine.connect().close()
         keyring.set_password('ELFYS_DB', "PASSWORD", password)
         keyring.set_password('ELFYS_DB', "USER", username)
-        logger.info('Database credentials are set. Now you can run the summary command.')
+        logger.info('Database credentials are set. Now you can use analyzer commands.')
     except OperationalError:
         logger.warn(
             'Cannot connect to the database with given credentials. Saving credentials is rejected.')

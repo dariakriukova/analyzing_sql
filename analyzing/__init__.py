@@ -5,17 +5,17 @@ from typing import Union
 import click
 import keyring
 import sentry_sdk
-from sqlalchemy import create_engine, desc
+from sqlalchemy import create_engine
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
-from orm import Wafer, ChipState, ClientVersion
-from utils import logger, get_db_url, CsvChoice
+from orm import ChipState, ClientVersion
+from utils import logger, get_db_url, EntityChoice
 from .compare_wafers import compare_wafers
 from .db import db_group, set_db
 from .parse import parse
 from .show import show
-from .summary import summary_iv, summary_cv
+from .summary import summary_group
 
 LOGO = """
 \b  █████╗  ███╗   ██╗  █████╗  ██╗   ██╗   ██╗ ███████╗ ███████╗ ██████╗
@@ -29,7 +29,7 @@ LOGO = """
 VERSION = '0.16'
 
 
-@click.group(commands=[summary_iv, summary_cv, db_group, show, parse, compare_wafers],
+@click.group(commands=[summary_group, db_group, show, parse, compare_wafers],
              help=f"{LOGO}\nVersion: {VERSION}")
 @click.pass_context
 @click.option("--log-level", default="INFO", help="Log level.", show_default=True,
@@ -61,19 +61,10 @@ def analyzing(ctx: click.Context, log_level: str, db_url: Union[str, None]):
                 sentry_sdk.capture_exception(e)
             ctx.exit()
 
-        if active_command in (summary_iv, summary_cv, compare_wafers):
+        if active_command in (compare_wafers, ):
             chip_states = session.query(ChipState).all()
             ctx.obj['chip_states'] = chip_states
             chip_state_option = next(
                 (o for o in active_command.params if o.name == 'chip_state_ids'))
-            chip_state_option.type = CsvChoice(
-                [str(state.id) for state in chip_states] + chip_state_option.default)
-            chip_state_option.help = chip_state_option.help + "\n\n\b\n" + "\n".join(
-                ["{} - {};".format(state.id, state.name) for state in chip_states])
+            chip_state_option.type = EntityChoice(chip_states, multiple=chip_state_option.multiple)
 
-        if active_command in (summary_cv, summary_iv):
-            last_wafer = session.query(Wafer).order_by(desc(Wafer.record_created_at)).first()
-            default_wafer_name = last_wafer.name
-            wafer_option = next((o for o in active_command.params if o.name == 'wafer_name'))
-            wafer_option.default = default_wafer_name
-            ctx.obj['default_wafer'] = last_wafer

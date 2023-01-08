@@ -15,9 +15,10 @@ from numpy import ndarray
 from openpyxl.formatting.rule import CellIsRule
 from openpyxl.styles import PatternFill, Fill
 from openpyxl.worksheet.worksheet import Worksheet
+from sqlalchemy import desc
 from sqlalchemy.orm import Session, joinedload
 
-from orm import IVMeasurement, CVMeasurement, Wafer, Chip
+from orm import IVMeasurement, CVMeasurement, Wafer, Chip, ChipState
 from utils import (
     logger,
     flatten_options,
@@ -25,14 +26,14 @@ from utils import (
     cv_thresholds,
     IV_VOLTAGE_PRESETS,
     VoltagesOption,
+    EntityChoice
 )
 
 date_formats = ['%Y-%m-%dT%H:%M:%S', '%Y-%m-%d']
 date_formats_help = f"Supported formats are: {', '.join((strftime(f) for f in date_formats))}."
 
 
-@click.command(name='summary-iv',
-               help="Make summary (png and xlsx) for IV measurements' data.")
+@click.command(name='iv', help="Make summary (png and xlsx) for IV measurements' data.")
 @click.pass_context
 @click.option("-t", "--chips-type", help="Type of the chips to analyze.")
 @click.option("-w", "--wafer", "wafer_name", prompt=f"Wafer name", help="Wafer name.")
@@ -40,7 +41,7 @@ date_formats_help = f"Supported formats are: {', '.join((strftime(f) for f in da
               default=lambda: f"summary-iv-{strftime('%y%m%d-%H%M%S')}",
               help="Output file names without extension.", show_default="summary-iv-{datetime}")
 @click.option("-s", "--chip-state", "chip_state_ids", help="State of the chips to analyze.",
-              default=['all'], show_default=True, multiple=True, callback=flatten_options)
+              default=['ALL'], show_default=True, multiple=True, callback=flatten_options)
 @click.option("--outliers-coefficient", default=2.0, show_default=True,
               help="Standard deviation multiplier to detect outlier measurements.", type=float)
 @click.option("--before", type=click.DateTime(formats=date_formats),
@@ -69,8 +70,7 @@ def summary_iv(ctx: click.Context, chips_type: Union[str, None], wafer_name: str
     else:
         logger.info('Chips type (-t or --chips-type) is not specified. Analyzing all chip types.')
 
-    if 'all' not in chip_state_ids:
-        query = query.filter(IVMeasurement.chip_state_id.in_(chip_state_ids))
+    query = query.filter(IVMeasurement.chip_state_id.in_(chip_state_ids))
 
     if before is not None or after is not None:
         after = after if after is not None else date.min
@@ -103,8 +103,7 @@ def summary_iv(ctx: click.Context, chips_type: Union[str, None], wafer_name: str
     logger.info(f'Summary data is saved to {exel_file_name}')
 
 
-@click.command(name='summary-cv',
-               help="Make summary (png and xlsx) for CV measurements' data.")
+@click.command(name='cv', help="Make summary_group (png and xlsx) for CV measurements' data.")
 @click.pass_context
 @click.option("-t", "--chips-type", help="Type of the chips to analyze.")
 @click.option("-w", "--wafer", "wafer_name", prompt=f"Wafer name", help="Wafer name.")
@@ -112,7 +111,7 @@ def summary_iv(ctx: click.Context, chips_type: Union[str, None], wafer_name: str
               default=lambda: f"summary-cv-{strftime('%y%m%d-%H%M%S')}",
               help="Output file names without extension.", show_default="summary-cv-{datetime}")
 @click.option("-s", "--chip-state", "chip_state_ids", help="State of the chips to analyze.",
-              default=['all'], show_default=True, multiple=True, callback=flatten_options)
+              default=['ALL'], show_default=True, multiple=True, callback=flatten_options)
 @click.option("--outliers-coefficient", default=2.0, show_default=True,
               help="Standard deviation multiplier to detect outlier measurements.", type=float)
 @click.option("--before", type=click.DateTime(formats=date_formats),
@@ -141,8 +140,7 @@ def summary_cv(ctx: click.Context, chips_type: Union[str, None], wafer_name: str
     else:
         logger.info('Chips type (-t or --chips-type) is not specified. Analyzing all chip types.')
 
-    if 'all' not in chip_state_ids:
-        query = query.filter(CVMeasurement.chip_state_id.in_(chip_state_ids))
+    query = query.filter(CVMeasurement.chip_state_id.in_(chip_state_ids))
 
     if before is not None or after is not None:
         after = after if after is not None else date.min
@@ -174,6 +172,25 @@ def summary_cv(ctx: click.Context, chips_type: Union[str, None], wafer_name: str
     save_cv_summary_to_excel(sheets_data, info, exel_file_name, voltages)
 
     logger.info(f'Summary data is saved to {exel_file_name}')
+
+
+@click.group(name='summary', help="Group of command to analyze and summaryze the data",
+             commands=[summary_iv, summary_cv])
+@click.pass_context
+def summary_group(ctx: click.Context):
+    session: Session = ctx.obj['session']
+    active_command = summary_group.commands[ctx.invoked_subcommand]
+    last_wafer = session.query(Wafer).order_by(desc(Wafer.record_created_at)).first()
+    default_wafer_name = last_wafer.name
+    wafer_option = next((o for o in active_command.params if o.name == 'wafer_name'))
+    wafer_option.default = default_wafer_name
+    ctx.obj['default_wafer'] = last_wafer
+
+    chip_states = session.query(ChipState).order_by(ChipState.id).all()
+    ctx.obj['chip_states'] = chip_states
+    chip_state_option = next(
+        (o for o in active_command.params if o.name == 'chip_state_ids'))
+    chip_state_option.type = EntityChoice(choices=chip_states, multiple=chip_state_option.multiple)
 
 
 def save_iv_summary_to_excel(sheets_data: dict, info: pd.Series, file_name: str,
@@ -305,11 +322,8 @@ def get_sheets_cv_data(measurements: list[CVMeasurement]) -> dict[str, Union[pd.
 def get_info(ctx: click.Context, wafer: Wafer, chip_state_ids: Iterable[str],
              measurements: list[Union[IVMeasurement, CVMeasurement]]) -> pd.Series:
     format_date = strftime("%A, %d %b %Y", localtime())
-    if 'all' in chip_state_ids:
-        chip_states_str = 'all'
-    else:
-        chip_states_str = "; ".join(
-            [state.name for state in ctx.obj['chip_states'] if str(state.id) in chip_state_ids])
+    chip_states_str = "; ".join(
+        [state.name for state in ctx.obj['chip_states'] if str(state.id) in chip_state_ids])
 
     first_measurement = min(measurements, key=lambda m: m.datetime)
     last_measurement = max(measurements, key=lambda m: m.datetime)
