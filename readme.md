@@ -42,10 +42,17 @@
 Running the program: `python analyzing.exe --help`
 
 ```
-Usage: analyzing.py [OPTIONS] COMMAND [ARGS]...
+   █████╗  ███╗   ██╗  █████╗  ██╗   ██╗   ██╗ ███████╗ ███████╗ ██████╗ 
+  ██╔══██╗ ████╗  ██║ ██╔══██╗ ██║   ╚██╗ ██╔╝ ╚══███╔╝ ██╔════╝ ██╔══██╗ 
+  ███████║ ██╔██╗ ██║ ███████║ ██║    ╚████╔╝    ███╔╝  █████╗   ██████╔╝ 
+  ██╔══██║ ██║╚██╗██║ ██╔══██║ ██║     ╚██╔╝    ███╔╝   ██╔══╝   ██╔══██╗ 
+  ██║  ██║ ██║ ╚████║ ██║  ██║ ███████╗ ██║    ███████╗ ███████╗ ██║  ██║ 
+  ╚═╝  ╚═╝ ╚═╝  ╚═══╝ ╚═╝  ╚═╝ ╚══════╝ ╚═╝    ╚══════╝ ╚══════╝ ╚═╝  ╚═╝
+
+  Version: 0.17
 
 Options:
-  --log-level [DEBUG|INFO|WARNING|ERROR|CRITICAL]
+  --log-level [DEBUG|INFO|WARNING|ERROR]
                                   Log level.  [default: INFO]
   --db-url TEXT                   Database URL.
   --help                          Show this message and exit.
@@ -55,8 +62,7 @@ Commands:
   db              Set of commands to manage related database
   parse           Parse files with measurements and save to database
   show            Show data from database
-  summary-cv      Make summary (png and xlsx) for CV measurements' data.
-  summary-iv      Make summary (png and xlsx) for IV measurements' data.
+  summary         Group of command to analyze and summaryze the data
 ```
 
 ### TODO
