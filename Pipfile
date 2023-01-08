@@ -20,6 +20,7 @@ sqlalchemy = "*"
 yoctopuce = "*"
 ipython = "*"
 alembic = "*"
+pytest = "*"
 
 [dev-packages]
 colorama = { version = "==0.4.5", sys_platform = "== 'win32'" }

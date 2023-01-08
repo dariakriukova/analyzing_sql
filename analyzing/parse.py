@@ -105,7 +105,7 @@ def parse_eqe(ctx: click.Context, file_paths: tuple[Path]):
 
 @click.group(name='parse', help="Parse files with measurements and save to database",
              commands=[parse_iv, parse_cv, parse_eqe])
-def parse():
+def parse_group():
     pass
 
 
@@ -251,7 +251,7 @@ def parse_epg_dat_file(file_path: Path) -> dict[str, Union[datetime, pd.DataFram
         time = datetime.strptime(time_match.group('time'), '%H:%M:%S')
 
     timestamp = datetime.combine(date, datetime.time(time))
-    table_matcher = re.compile(r'^(?P<table>([\w]{1,10}\t?){3,5}$\n[\s\d.E+-]*?)[\n\r]{2}',
+    table_matcher = re.compile(r'^(?P<table>(\w{1,10}\t+){2,4}\w{1,10}\t?$\n[\s\d.E+-]*?)[\n\r]{2}',
                                re.M | re.I)
     data = pd.DataFrame()
     for match in table_matcher.finditer(content):

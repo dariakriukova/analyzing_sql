@@ -13,7 +13,7 @@ from orm import ChipState, ClientVersion
 from utils import logger, get_db_url, EntityChoice
 from .compare_wafers import compare_wafers
 from .db import db_group, set_db
-from .parse import parse
+from .parse import parse_group
 from .show import show
 from .summary import summary_group
 
@@ -29,7 +29,7 @@ LOGO = """
 VERSION = '0.17'
 
 
-@click.group(commands=[summary_group, db_group, show, parse, compare_wafers],
+@click.group(commands=[summary_group, db_group, show, parse_group, compare_wafers],
              help=f"{LOGO}\nVersion: {VERSION}")
 @click.pass_context
 @click.option("--log-level", default="INFO", help="Log level.", show_default=True,
