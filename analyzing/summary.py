@@ -254,7 +254,10 @@ def apply_conditional_formatting(sheet: Worksheet, chip_types: list[str], rules:
         def is_current_type(chip_name: str) -> bool:
             return chip_name.startswith(chip_type)
 
-        for voltage, threshold in thresholds[chip_type].items():
+        chip_type_thresholds = thresholds.get(chip_type)
+        if chip_type_thresholds is None:
+            continue
+        for voltage, threshold in chip_type_thresholds.items():
             voltage = Decimal(voltage)
             try:
                 column_cell = next((cell for cell in sheet['1'] if
