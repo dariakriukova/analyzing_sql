@@ -18,7 +18,7 @@ from openpyxl.worksheet.worksheet import Worksheet
 from sqlalchemy import desc
 from sqlalchemy.orm import Session, joinedload
 
-from orm import IVMeasurement, CVMeasurement, Wafer, Chip, ChipState
+from orm import IVMeasurement, CVMeasurement, EqeMeasurement, EqeConditions, EqeSession, Wafer, Chip, ChipState
 from utils import (
     logger,
     flatten_options,
@@ -174,6 +174,77 @@ def summary_cv(ctx: click.Context, chips_type: Union[str, None], wafer_name: str
 
     logger.info(f'Summary data is saved to {exel_file_name}')
 
+###EQE START
+@click.command(name='eqe', help="Make summary (png and xlsx) for EQE measurements' data.")
+@click.pass_context
+@click.option("-t", "--chips-type", help="Type of the chips to analyze.")
+@click.option("-w", "--wafer", "wafer_name", prompt=f"Wafer name", help="Wafer name.")
+@click.option("-o", "--output", "file_name",
+              default=lambda: f"summary-eqe-{strftime('%y%m%d-%H%M%S')}",
+              help="Output file names without extension.", show_default="summary-eqe-{datetime}")
+@click.option("-s", "--chip-state", "chip_state_ids", help="State of the chips to analyze.",
+              default=['ALL'], show_default=True, multiple=True, callback=flatten_options)
+@click.option("--before", type=click.DateTime(formats=date_formats),
+              help=f"Include measurements before (exclusive) provided date and time. {date_formats_help}")
+@click.option("--after", type=click.DateTime(formats=date_formats),
+              help=f"Include measurements after (inclusive) provided date and time. {date_formats_help}")
+@click.option("--eqe_session", "eqe_session_id", help="Type EQE session id")
+
+def summary_eqe(ctx: click.Context, chips_type: Union[str, None], wafer_name: str, file_name: str,
+               chip_state_ids: tuple[str],
+               before: Union[datetime, None],
+               after: Union[datetime, None],
+               eqe_session_ids: tuple[int]):
+    session: Session = ctx.obj['session']
+    if ctx.obj['default_wafer'].name != wafer_name:
+        wafer = session.query(Wafer).filter(Wafer.name == wafer_name).first()
+    else:
+        wafer = ctx.obj['default_wafer']
+    query = session.query(EqeMeasurement) \
+        .filter(EqeMeasurement.chip.has(Chip.wafer.__eq__(wafer))) \
+        .options(joinedload(EqeMeasurement.chip))
+    
+    if chips_type is not None:
+        query = query.filter(EqeMeasurement.chip.has(Chip.type.__eq__(chips_type)))
+    else:
+        logger.info('Chips type (-t or --chips-type) is not specified. Analyzing all chip types.')
+
+    query = query.filter(EqeMeasurement.chip_state_id.in_(chip_state_ids))
+
+    if before is not None or after is not None:
+        after = after if after is not None else date.min
+        before = before if before is not None else date.max
+        query = query.filter(EqeMeasurement.datetime.between(after, before))
+
+    measurements = query.all()
+
+    if not measurements:
+        logger.warn('No measurements found.')
+        return
+
+    sheets_data = get_sheets_data(measurements)
+    value_extractor = lambda m: m.anode_current_corrected or m.anode_current
+    fig, axes = plot_data(measurements, value_extractor)
+    for [ax, _] in axes:
+        ax.set_xlabel("EQE [%]")
+
+    png_file_name = file_name + '.png'
+    check_file_exists(png_file_name)
+    fig.savefig(png_file_name, dpi=300)
+    logger.info(f'Summary data is plotted to {png_file_name}')
+
+    exel_file_name = file_name + '.xlsx'
+    check_file_exists(exel_file_name)
+    info = get_info(ctx, wafer=wafer, chip_state_ids=chip_state_ids, measurements=measurements)
+    save_iv_summary_to_excel(sheets_data, info, exel_file_name)
+
+    logger.info(f'Summary data is saved to {exel_file_name}')
+
+
+
+
+
+###EQE END
 
 @click.group(name='summary', help="Group of command to analyze and summaryze the data",
              commands=[summary_iv, summary_cv])
