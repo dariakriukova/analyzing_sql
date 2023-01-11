@@ -18,7 +18,8 @@ from openpyxl.worksheet.worksheet import Worksheet
 from sqlalchemy import desc
 from sqlalchemy.orm import Session, joinedload
 
-from orm import IVMeasurement, CVMeasurement, EqeMeasurement, Wafer, Chip, ChipState, EqeSession
+from orm import IVMeasurement, CVMeasurement, EqeMeasurement, Wafer, Chip, ChipState, EqeSession, \
+    EqeConditions
 from utils import (
     logger,
     flatten_options,
@@ -188,9 +189,29 @@ def summary_eqe(ctx: click.Context,
                 session_date: Union[datetime, None]):
     session: Session = ctx.obj['session']
 
-    query = session.query(EqeMeasurement) \
-        .filter(EqeMeasurement.chip.has(Chip.wafer.__eq__(wafer))) \
-        .options(joinedload(EqeMeasurement.chip))
+    query = session.query(EqeMeasurement).join(EqeConditions)
+
+    if session_date:
+        eqe_session = session.query(EqeSession).filter(EqeSession.date == session_date).one_or_none()
+        if eqe_session is None:
+            logger.warn('EQE session with specified date was not found!')
+            ctx.exit()
+        query = query.filter(EqeConditions.session == eqe_session)
+
+    if wafer_name:
+        # TODO: don't load entire chip but only its id
+        wafer = session.query(Wafer).join(Chip).filter(Wafer.name == wafer_name).one_or_none()
+        if wafer is None:
+            logger.warn('Wafer with specified name was not found!')
+            ctx.exit()
+        # TODO: make sure chip is actually joined above
+        query = query.filter(EqeConditions.chip_id.in_([c.id for c in wafer.chips]))
+
+    measurements = query.all()
+
+
+        # .filter(EqeMeasurement.chip.has(Chip.wafer.__eq__(wafer))) \
+        # .options(joinedload(EqeMeasurement.chip))
 
     query = query.filter(EqeMeasurement.chip_state_id.in_(chip_state_ids))
 
